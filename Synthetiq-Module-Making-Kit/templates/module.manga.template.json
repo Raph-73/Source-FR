@@ -1,0 +1,36 @@
+{
+  "id": "example-manga-v1",
+  "name": "Example Manga",
+  "contentType": "image",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.1",
+  "description": "Manga reading from example-manga.test with direct chapter image delivery.",
+  "moduleFamilyId": "example_manga_v1",
+  "moduleIdentity": "PENDING-OWNER-ALLOCATION",
+  "moduleIdentityNumber": 0,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "presentation": {
+    "category": "Manga",
+    "purpose": "English Manga",
+    "recommended": false,
+    "language": "English",
+    "languages": ["sub"],
+    "iconUrl": "https://example-manga.test/icon.png"
+  },
+  "config": {
+    "capabilities": {},
+    "runtime": { "entry": "index.js", "mode": "local" },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 4
+    },
+    "baseUrl": "https://example-manga.test",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+      "Referer": "https://example-manga.test/"
+    }
+  }
+}

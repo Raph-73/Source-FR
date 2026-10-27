@@ -1,0 +1,45 @@
+{
+  "id": "franime-v1",
+  "name": "Franime",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.4",
+  "description": "French anime catalogue (franime.fr API) with VOSTFR (vo/sub) and VF (dub) episodes resolved via sibnet, vidmoly, uqload, dailymotion, vk and sendvid embeds, with HLS quality ladders and enriched episode titles. Text search uses the public Kitsu index with per-hit franime verification.",
+  "moduleFamilyId": "franime_v1",
+  "moduleIdentity": "PENDING-OWNER-ALLOCATION",
+  "moduleIdentityNumber": 0,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "presentation": {
+    "category": "Anime",
+    "purpose": "French (VOSTFR / VF) Anime",
+    "recommended": false,
+    "language": "French (VOSTFR / VF)",
+    "languages": ["sub", "dub"],
+    "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "presentation": {
+      "category": "Anime",
+      "purpose": "French (VOSTFR / VF) Anime",
+      "recommended": false,
+      "language": "French (VOSTFR / VF)",
+      "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+    },
+    "runtime": { "entry": "index.js", "mode": "local" },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 2097152,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 4
+    },
+    "baseUrl": "https://franime.fr",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+      "Referer": "https://franime.fr/"
+    }
+  }
+}

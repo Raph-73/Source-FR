@@ -1,0 +1,43 @@
+{
+  "id": "movie-direct-v1",
+  "name": "Movie Direct",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "0.2.0",
+  "version": "0.2.0",
+  "moduleFamilyId": "movie_direct_v1",
+  "moduleIdentity": "SP-VID-075-MOVIE-DIRECT",
+  "moduleIdentityNumber": 75,
+  "releaseTrack": "private",
+  "moduleStatus": "trial",
+  "description": "Private TMDB catalogue with independent VideoEasy lookup. Fresh resolve and media probe on every play. Does not scrape StreamingUnity. Not for official release.",
+  "presentation": {
+    "category": "Movies & TV",
+    "purpose": "Movies & TV",
+    "recommended": false,
+    "language": "English"
+  },
+  "config": {
+    "language": "English",
+    "contentLanguage": "en",
+    "baseUrl": "https://www.themoviedb.org",
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 2500000,
+      "timeoutMs": 25000,
+      "maxConcurrentRequests": 3
+    },
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+      "Referer": "https://player.videasy.to/",
+      "Origin": "https://player.videasy.to"
+    }
+  }
+}
