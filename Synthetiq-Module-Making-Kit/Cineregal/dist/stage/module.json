@@ -1,0 +1,44 @@
+{
+  "id": "cineregal-v1",
+  "name": "CineRegal",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.1",
+  "version": "1.0.0-beta.1",
+  "moduleFamilyId": "cineregal_v1",
+  "moduleIdentity": "SP-VID-9003-CINEREGAL",
+  "moduleIdentityNumber": 9003,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "description": "Catalogue public CineRegal (cineregal.onl) : films et series en VF, recherche TMDB en francais, fiches detaillees, saisons et episodes, et decouverte (tendances, films et series populaires, mieux notes). Lecture via le lecteur HD public fluxora.sbs : le module resout le lien HLS signe depuis la page d'embed, verifie la playlist et expose les qualites reellement presentes (la plus haute par defaut). Un titre sans source disponible est refuse avec un message explicite : aucune lecture n'est inventee.",
+  "presentation": {
+    "category": "Films & Series",
+    "purpose": "Catalogue francophone (VF)",
+    "recommended": false,
+    "language": "Francais (VF)",
+    "languages": [
+      "dub"
+    ],
+    "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 6
+    },
+    "baseUrl": "https://cineregal.onl",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+      "Referer": "https://fluxora.sbs/"
+    }
+  }
+}

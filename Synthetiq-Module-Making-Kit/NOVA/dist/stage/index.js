@@ -633,6 +633,18 @@
     return false;
   }
 
+  function tierLabel(height) {
+    if (!height) return 'Auto';
+    if (height >= 2000) return '2160p';
+    if (height >= 1300) return '1440p';
+    if (height >= 900) return '1080p';
+    if (height >= 650) return '720p';
+    if (height >= 420) return '480p';
+    if (height >= 300) return '360p';
+    if (height >= 200) return '240p';
+    return height + 'p';
+  }
+
   function packHls(valid, masterUrl) {
     valid.sort(function (a, b) {
       return (b.height - a.height) || (b.bandwidth - a.bandwidth) || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
@@ -646,10 +658,14 @@
     }
     if (!list.length) return null;
 
-    var streams = [], qualities = [];
+    var streams = [], qualities = [], labels = {};
     for (var j = 0; j < list.length; j++) {
       var v = list[j];
-      var label = v.height ? ('dub ' + v.height + 'p') : 'dub Auto';
+      var label = 'dub ' + tierLabel(v.height);
+      /* Two renditions can share a tier (1796x1076 and 1920x1080). Keep the
+       * first, which is the higher-bandwidth one after the sort above. */
+      if (labels[label]) continue;
+      labels[label] = true;
       streams.push(label, v.url);
       qualities.push({ label: label, height: v.height || undefined, url: v.url, headers: STREAM_HEADERS });
     }
@@ -660,8 +676,8 @@
       qualities.push({ label: 'dub Auto (adaptatif)', url: masterUrl, headers: STREAM_HEADERS });
     }
     var top = list[0];
-    var topQ = top.height ? (top.height + 'p') : 'Auto';
-    return {
+    var topQ = tierLabel(top.height);
+    var result = {
       streams: streams,
       url: top.url,
       headers: STREAM_HEADERS,
@@ -672,6 +688,10 @@
       subtitles: [],
       lang: 'dub'
     };
+    if (list.length === 1 && top.height && top.height <= 360) {
+      result.notice = 'La source uqload ne propose que ' + top.height + 'p pour ce titre ; aucune variante superieure n\'est publiee.';
+    }
+    return result;
   }
 
   function streamFail(message, lang) {
@@ -723,7 +743,20 @@
     return packed ? { ok: true, result: packed } : { ok: false, error: 'Aucune qualité HLS lisible.' };
   }
 
+  function isDirectHls(url) {
+    return /^https:\/\/[^\/]*uqload\./i.test(url) && /\.m3u8(?:\?|$)/i.test(url);
+  }
+
   async function resolveSource(item, watchUrl, episodeInfo, deadline) {
+    /* Some catalogue entries carry a signed HLS master straight from the
+     * episodes API instead of a public page. That link is provenance enough:
+     * it was issued for this exact title/episode, and there is no landing page
+     * whose filename could be verified anyway. */
+    if (isDirectHls(String(watchUrl || '').trim())) {
+      var direct = await resolveHls(String(watchUrl).trim(), deadline);
+      if (direct.ok) return direct.result;
+    }
+
     var id = uqloadIdFromUrl(watchUrl);
     if (!id) {
       var host = hostOf(watchUrl);

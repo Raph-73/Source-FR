@@ -3,12 +3,12 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 3,
-  "bundleFile": "bundles/Ney-Source-Bundle-3.zip",
+  "bundleVersion": 4,
+  "bundleFile": "bundles/Ney-Source-Bundle-4.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
-      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.6.zip",
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.7.zip",
       "presentation": {
         "category": "Anime",
         "purpose": "French (VOSTFR / VF) Anime",
@@ -21,13 +21,14 @@
         "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
       },
       "changelog": [
+        "1.0.0-beta.7: Hero cards now use the 1981-2048 px Kitsu banner artwork instead of the small portrait poster, and text search is rebuilt around French titles (AniList search mapped to Kitsu, in parallel with Kitsu text search, 8.5 s deadline, bounded verification, Kitsu-card fallback): a French query now answers in about 2 s instead of failing after a delay.",
         "1.0.0-beta.6: High-resolution posters (original Kitsu artwork instead of the 284x402 thumbnails), a square 512x512 header icon, and search reworked to finish inside the app budget (9 s deadline, 4-way franime verification, Kitsu-card fallback when franime is rate-limited) so it no longer fails after a delay.",
         "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
         "1.0.0-beta.4: Previous Franime package (French anime catalogue with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution)."
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.4.zip",
+      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.5.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone",
@@ -39,9 +40,26 @@
         "iconUrl": "https://watchnova.win/icon-192.png"
       },
       "changelog": [
+        "1.0.0-beta.5: Signed HLS masters carried by the catalogue are played directly, quality labels are normalised to standard tiers (1076p becomes 1080p) and deduplicated, and a title whose upload only offers 360p now lists every available quality with an explicit notice instead of silently capping playback. The maximum quality still depends on the uploaded file.",
         "1.0.0-beta.4: Quality picker now lists every HLS rendition exposed by the uqload source, highest first, plus an adaptive Auto option; numeric title suffixes no longer trigger a false source-mismatch block. The maximum quality still depends on the uploaded file.",
         "1.0.0-beta.3: Private repository identity SP-VID-9002-NOVA-STREAM allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
         "1.0.0-beta.2: Previous NOVA package (public catalogue with films, series, search, details, episodes and VF playback through public uqload embeds)."
+      ]
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.1.zip",
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone (VF)",
+        "recommended": false,
+        "language": "Francais (VF)",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
+      },
+      "changelog": [
+        "1.0.0-beta.1: New CineRegal module (cineregal.onl): French TMDB catalogue with multi search, details, seasons/episodes and discovery (trending, popular, top rated). Playback goes through the site's public HD reader (fluxora.sbs): the signed HLS gateway is resolved from the embed page, validated, and every available rendition is exposed highest first. Titles without an available source fail with an explicit message."
       ]
     }
   ],
@@ -94,6 +112,20 @@
       "version": "1.0.0-beta.3",
       "sha256": "728c7afe3f5c2225d9d101708827093a2ded22f1f817de88aae407b41a1a883a",
       "retiredAtMs": 1793210945284
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.6.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.6",
+      "sha256": "423c9228c8e1e341ccaae258bd5d73d660b00b6a7c1787131d382710cb73a095",
+      "retiredAtMs": 1793213890865
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.4.zip",
+      "moduleId": "nova-streaming",
+      "version": "1.0.0-beta.4",
+      "sha256": "cc2d0f29ee0be5f5870c936d62b8234a5c83d2a53cf6e17e78c568850f8cf4f0",
+      "retiredAtMs": 1793213890865
     }
   ]
 }

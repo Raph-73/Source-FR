@@ -129,8 +129,8 @@
     return { status: status, text: String(text || ''), headers: (res && res.headers) || {} };
   }
 
-  async function requestJson(url, headers, timeoutMs) {
-    var res = await fetchv2(url, headers || {}, 'GET', null, { timeoutMs: timeoutMs });
+  async function requestJson(url, headers, timeoutMs, method, body) {
+    var res = await fetchv2(url, headers || {}, method || 'GET', body == null ? null : body, { timeoutMs: timeoutMs });
     var status = Number(res && (res.status || res.statusCode)) || 0;
     var data = null;
     if (res && typeof res.json === 'function') {
@@ -239,22 +239,71 @@
    * Only entries that exist on franime with >= 1 episode and not flagged
    * nsfw are returned. All responses stay well under 1 MB. */
   var KITSU = 'https://kitsu.io/api/edge';
+  var ANILIST = 'https://graphql.anilist.co';
   function kitsuHeaders() {
     return { 'User-Agent': UA, 'Accept': 'application/vnd.api+json' };
   }
   async function kitsuSearch(text, deadline) {
-    var url = KITSU + '/anime?filter[text]=' + encodeURIComponent(text) + '&page[limit]=12';
+    var url = KITSU + '/anime?filter[text]=' + encodeURIComponent(text) + '&page[limit]=10';
     var last = null;
     for (var attempt = 0; attempt < 2; attempt++) {
-      if (now() >= deadline - 1500) break;
+      if (now() >= deadline - 900) break;
       try {
-        var res = await requestJson(url, kitsuHeaders(), timeLeft(deadline, 5000));
+        var res = await requestJson(url, kitsuHeaders(), timeLeft(deadline, 4000));
         if (res.status === 200 && res.data && Array.isArray(res.data.data)) return res.data.data;
         last = new Error('Kitsu search HTTP ' + res.status);
         if (res.status === 404) break;
       } catch (e) { last = e; }
     }
     throw last || new Error('Kitsu search failed');
+  }
+  /* Kitsu only indexes English/romaji titles, so a French query ("l'attaque
+   * des titans") returns nothing. AniList matches synonyms (which carry the
+   * French titles) and exposes the MyAnimeList id, which Kitsu maps back to
+   * the Kitsu id franime itself indexes. */
+  async function anilistMalIds(text, deadline) {
+    var query = 'query($s:String){Page(perPage:10){media(search:$s,type:ANIME,sort:SEARCH_MATCH){idMal}}}';
+    try {
+      var res = await requestJson(
+        ANILIST,
+        { 'User-Agent': UA, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        timeLeft(deadline, 3000),
+        'POST',
+        JSON.stringify({ query: query, variables: { s: text } })
+      );
+      var media = res.data && res.data.data && res.data.data.Page && res.data.data.Page.media;
+      if (res.status !== 200 || !Array.isArray(media)) return [];
+      var out = [], seen = {};
+      for (var i = 0; i < media.length; i++) {
+        var mal = media[i] && media[i].idMal;
+        if (mal && !seen[mal]) { seen[mal] = true; out.push(String(mal)); }
+      }
+      return out;
+    } catch (_) { return []; }
+  }
+  async function kitsuHitsFromMal(malIds, deadline) {
+    if (!malIds.length) return [];
+    var url = KITSU + '/mappings?filter[externalSite]=myanimelist%2Fanime&filter[externalId]=' +
+      malIds.slice(0, 10).join(',') +
+      '&include=item&fields[anime]=titles,canonicalTitle,posterImage,startDate,synopsis,subtype,status&page[limit]=20';
+    var res = await requestJson(url, kitsuHeaders(), timeLeft(deadline, 3000));
+    if (res.status !== 200 || !res.data) return [];
+    var included = {}, inc = res.data.included || [], i;
+    for (i = 0; i < inc.length; i++) {
+      if (inc[i] && inc[i].type === 'anime') included[String(inc[i].id)] = inc[i];
+    }
+    var byMal = {}, list = res.data.data || [];
+    for (i = 0; i < list.length; i++) {
+      var rel = list[i] && list[i].relationships && list[i].relationships.item && list[i].relationships.item.data;
+      var aid = rel && rel.id != null ? String(rel.id) : '';
+      var a = included[aid];
+      if (!aid || !a) continue;
+      var mal = String((list[i].attributes || {}).externalId || '');
+      byMal[mal] = { id: aid, attributes: a.attributes || {} };
+    }
+    var hits = [];
+    for (i = 0; i < malIds.length; i++) if (byMal[malIds[i]]) hits.push(byMal[malIds[i]]);
+    return hits;
   }
   /* Card built straight from a Kitsu hit. Used as a resilience fallback when
    * franime verification is temporarily blocked (Cloudflare/rate limit) so a
@@ -265,7 +314,8 @@
     if (!id) return null;
     var p = at.posterImage || {};
     var img = String(p.large || p.original || p.medium || p.small || '').trim();
-    var title = clean(at.canonicalTitle ||
+    var title = clean((at.titles && at.titles.fr) ||
+      at.canonicalTitle ||
       (at.titles && (at.titles.en || at.titles.en_jp || at.titles.ja_jp)) || '');
     if (!title) return null;
     var ym = String(at.startDate || '').match(/(\d{4})/);
@@ -312,6 +362,14 @@
     };
     var banner = bannerOf(a);
     if (banner) card.banner = banner;
+    return card;
+  }
+  /* Hero slots are full-bleed and landscape: the 460x651 poster is far too
+   * small there, while the Kitsu cover image is 1981-2048 px wide. */
+  function heroCardOf(a) {
+    var card = cardOf(a);
+    var banner = bannerOf(a);
+    if (banner) { card.image = banner; card.backdrop = banner; }
     return card;
   }
 
@@ -382,7 +440,7 @@
   async function searchResults(query) {
     /* The app budget is ~15 s: stop well before it so a slow franime/Cloudflare
      * response can never surface as an app-level timeout. */
-    var deadline = now() + 9000;
+    var deadline = now() + 8500;
     var term = String(query == null ? '' : query).trim();
     if (!term) {
       try {
@@ -398,24 +456,41 @@
       }
     }
 
-    var hits;
-    try {
-      hits = await kitsuSearch(term, deadline);
-    } catch (_) {
-      /* Kitsu unreachable/rate-limited: report "no result" instead of an error. */
-      return [];
-    }
+    /* French and English matching run in parallel. AniList resolves the query
+     * (including French synonyms) to MAL ids and Kitsu maps those back to the
+     * ids franime indexes; the plain Kitsu text search still covers romaji and
+     * English titles without the extra round trip. */
+    var mappedPromise = anilistMalIds(term, deadline)
+      .then(function (ids) { return kitsuHitsFromMal(ids, deadline); })
+      .catch(function () { return []; });
+    var kitsuPromise = kitsuSearch(term, deadline).catch(function () { return []; });
 
-    var out = [], seen = {}, fallback = [], blocked = false;
-    /* Verify Kitsu hits against franime four at a time, keeping Kitsu order.
-     * 12 hits = 3 short rounds, comfortably inside the deadline. */
-    for (var h = 0; h < hits.length && out.length < 10 && now() < deadline - 400; h += 4) {
-      var batch = hits.slice(h, h + 4);
+    var mapped = await mappedPromise;
+    var direct = await kitsuPromise;
+
+    var hits = [], seenId = {};
+    function collect(list) {
+      for (var n = 0; n < list.length; n++) {
+        var h = list[n], hid = h && h.id != null ? String(h.id) : '';
+        if (!hid || seenId[hid]) continue;
+        seenId[hid] = true;
+        hits.push(h);
+      }
+    }
+    collect(mapped);
+    collect(direct);
+    hits = hits.slice(0, 16);
+
+    var out = [], seen = {}, fallback = [];
+    /* Verify candidates six at a time, keeping relevance order. franime needs
+     * one request per id, so the batch size is the only lever on latency. */
+    for (var h = 0; h < hits.length && out.length < 10 && now() < deadline - 400; h += 6) {
+      var batch = hits.slice(h, h + 6);
       var results = await Promise.all(batch.map(async function (hit) {
         var kid = hit && hit.id != null ? String(hit.id) : '';
         if (!kid) return null;
         try {
-          return { ok: true, anime: await fetchAnimeById(kid, deadline, 3500) };
+          return { ok: true, anime: await fetchAnimeById(kid, deadline, 1800) };
         } catch (e) {
           return { ok: false, transient: !e || e.kind !== 'notfound', hit: hit };
         }
@@ -425,7 +500,6 @@
         if (!r) continue;
         if (!r.ok) {
           if (r.transient) {
-            blocked = true;
             var fc = kitsuCardOf(r.hit);
             if (fc && !seen['k:' + fc.id]) {
               seen['k:' + fc.id] = true;
@@ -445,7 +519,7 @@
     }
     /* franime verification was blocked and nothing could be confirmed: return
      * the Kitsu cards (same ids/source franime indexes) rather than failing. */
-    if (!out.length && blocked && fallback.length) return fallback.slice(0, 10);
+    if (!out.length && fallback.length) return fallback.slice(0, 10);
     return out;
   }
 
@@ -861,7 +935,7 @@
       var items = [];
       for (var i = 0; i < top.length && items.length < 8; i++) {
         if (top[i].nsfw || !titleOf(top[i])) continue;
-        items.push(toCard(top[i]));
+        items.push(heroCardOf(top[i]));
       }
       items = dedupe(items);
       if (items.length) sections.push({ id: 'top', title: 'Top animes', style: 'hero', items: items });
