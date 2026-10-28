@@ -3,7 +3,7 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1793208071904,
+  "publishedAtMs": 1793208409123,
   "modules": [
     {
       "moduleId": "franime-v1",
@@ -16,7 +16,7 @@
       "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
       "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
       "sha256": "ce1e609fe423f0ee811896ef1b9426ed77095e35ac33c5afdbff22c0d55ddd42",
-      "publishedAtMs": 1793208071904,
+      "publishedAtMs": 1793208409123,
       "changelog": [
         "1.0.0-beta.4: Current package. French anime catalogue (franime.fr) with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution.",
         "1.0.0-beta.1 to 1.0.0-beta.3: Earlier beta packages retained under Franime/dist for reference."
@@ -31,7 +31,8 @@
           "dub"
         ],
         "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
-      }
+      },
+      "signature": ""
     },
     {
       "moduleId": "nova-streaming",
@@ -44,7 +45,7 @@
       "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
       "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
       "sha256": "bc7a250fa47ca3e70e623a760fbf4e142dcd23d48dff5c81ab5714f039174601",
-      "publishedAtMs": 1793208071904,
+      "publishedAtMs": 1793208409123,
       "changelog": [
         "1.0.0-beta.2: Current package. Public NOVA catalogue (watchnova.win) with films, series, search, details, episodes and VF playback through public uqload embeds."
       ],
@@ -57,7 +58,21 @@
           "dub"
         ],
         "iconUrl": "https://watchnova.win/icon-192.png"
-      }
+      },
+      "signature": ""
     }
-  ]
+  ],
+  "bundle": {
+    "version": 1,
+    "minAppVersion": "8.0.0",
+    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-1.zip",
+    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-1.zip",
+    "sha256": "0e0482a9c9d782d477652240060b9f9d48db7c792291dabf5f354c383d73efbf",
+    "signature": ""
+  },
+  "defaultModules": {
+    "video": "franime-v1"
+  },
+  "defaultModulesSignature": "",
+  "signature": ""
 }
