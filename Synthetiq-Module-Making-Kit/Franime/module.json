@@ -3,8 +3,8 @@
   "name": "Franime",
   "contentType": "video",
   "contractVersion": 4,
-  "moduleVersion": "1.0.0-beta.5",
-  "description": "French anime catalogue (franime.fr API) with VOSTFR (vo/sub) and VF (dub) episodes resolved via sibnet, vidmoly, uqload, dailymotion, vk and sendvid embeds, with HLS quality ladders and enriched episode titles. Text search uses the public Kitsu index with per-hit franime verification.",
+  "moduleVersion": "1.0.0-beta.6",
+  "description": "French anime catalogue (franime.fr API) with VOSTFR (vo/sub) and VF (dub) episodes resolved via sibnet, vidmoly, uqload, dailymotion, vk and sendvid embeds, with HLS quality ladders and enriched episode titles. High-resolution posters and a 512x512 header icon. Text search uses the public Kitsu index with bounded per-hit franime verification and a Kitsu-card fallback so search never hard-fails.",
   "moduleFamilyId": "franime_v1",
   "moduleIdentity": "SP-VID-9001-FRANIME",
   "moduleIdentityNumber": 9001,
@@ -16,7 +16,7 @@
     "recommended": false,
     "language": "French (VOSTFR / VF)",
     "languages": ["sub", "dub"],
-    "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+    "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
   },
   "config": {
     "capabilities": {
@@ -27,7 +27,7 @@
       "purpose": "French (VOSTFR / VF) Anime",
       "recommended": false,
       "language": "French (VOSTFR / VF)",
-      "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+      "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
     },
     "runtime": { "entry": "index.js", "mode": "local" },
     "caps": {

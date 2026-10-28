@@ -246,14 +246,35 @@
     var url = KITSU + '/anime?filter[text]=' + encodeURIComponent(text) + '&page[limit]=12';
     var last = null;
     for (var attempt = 0; attempt < 2; attempt++) {
-      if (now() >= deadline) break;
+      if (now() >= deadline - 1500) break;
       try {
-        var res = await requestJson(url, kitsuHeaders(), timeLeft(deadline, 10000));
+        var res = await requestJson(url, kitsuHeaders(), timeLeft(deadline, 5000));
         if (res.status === 200 && res.data && Array.isArray(res.data.data)) return res.data.data;
         last = new Error('Kitsu search HTTP ' + res.status);
+        if (res.status === 404) break;
       } catch (e) { last = e; }
     }
     throw last || new Error('Kitsu search failed');
+  }
+  /* Card built straight from a Kitsu hit. Used as a resilience fallback when
+   * franime verification is temporarily blocked (Cloudflare/rate limit) so a
+   * search never hard-fails. Kitsu ids are the ids franime itself indexes. */
+  function kitsuCardOf(hit) {
+    var at = (hit && hit.attributes) || {};
+    var id = hit && hit.id != null ? String(hit.id) : '';
+    if (!id) return null;
+    var p = at.posterImage || {};
+    var img = String(p.large || p.original || p.medium || p.small || '').trim();
+    var title = clean(at.canonicalTitle ||
+      (at.titles && (at.titles.en || at.titles.en_jp || at.titles.ja_jp)) || '');
+    if (!title) return null;
+    var ym = String(at.startDate || '').match(/(\d{4})/);
+    return {
+      id: id, href: id, title: title, image: img, poster: img,
+      type: 'video', description: clean(at.synopsis || ''),
+      year: ym ? ym[1] : '', format: String(at.subtype || '').toUpperCase(),
+      status: String(at.status || '').toUpperCase()
+    };
   }
   function countEpisodes(a) {
     var n = 0, ss = (a && a.saisons) || [];
@@ -267,8 +288,15 @@
   }
   function imageOf(a) {
     if (!a) return '';
-    var img = a.affiche_small || a.affiche || '';
+    /* `affiche` is the original Kitsu poster (e.g. 600x856) while
+     * `affiche_small` is a 284x402 thumbnail that looks blurry on TV and
+     * tablet grids. Prefer the original and only fall back to the thumb. */
+    var img = a.affiche || a.affiche_small || '';
     return String(img || '').trim();
+  }
+  function bannerOf(a) {
+    if (!a) return '';
+    return String(a.banner || '').trim();
   }
   function yearOf(a) {
     var d = String((a && (a.startDate || a.year)) || '');
@@ -277,23 +305,31 @@
   }
   function cardOf(a) {
     var id = String(a.id);
-    return {
+    var card = {
       id: id, href: id, title: titleOf(a), image: imageOf(a), poster: imageOf(a),
       type: 'video', description: clean(a.description || ''),
       year: yearOf(a), format: String(a.format || ''), status: String(a.status || '')
     };
+    var banner = bannerOf(a);
+    if (banner) card.banner = banner;
+    return card;
   }
 
-  async function fetchAnimeById(id, deadline) {
+  async function fetchAnimeById(id, deadline, cap) {
     var key = String(id);
     var hit = detailsCache[key];
     if (hit && now() - hit.at < 5 * 60 * 1000) return hit.data;
-    var res = await requestJson(API + '/api/anime-by-id/' + encodeURIComponent(id), mergeHeaders(), timeLeft(deadline, 12000));
+    var res = await requestJson(API + '/api/anime-by-id/' + encodeURIComponent(id), mergeHeaders(), timeLeft(deadline, cap || 12000));
     if (res.status === 200 && res.data && (res.data.id != null)) {
       detailsCache[key] = { at: now(), data: res.data };
       return res.data;
     }
-    throw new Error('Franime details HTTP ' + res.status);
+    var err = new Error('Franime details HTTP ' + res.status);
+    err.status = res.status;
+    /* 404/410 = this Kitsu entry is genuinely absent from franime.
+     * Anything else (403 Cloudflare, 429, 5xx, HTML challenge) is transient. */
+    err.kind = (res.status === 404 || res.status === 410) ? 'notfound' : 'blocked';
+    throw err;
   }
 
   /* Season metadata (Kitsu titles/thumbnails). Applied only when the meta
@@ -344,33 +380,72 @@
 
   /* ---------------- search / details / episodes ---------------- */
   async function searchResults(query) {
-    var deadline = now() + 25000;
+    /* The app budget is ~15 s: stop well before it so a slow franime/Cloudflare
+     * response can never surface as an app-level timeout. */
+    var deadline = now() + 9000;
     var term = String(query == null ? '' : query).trim();
     if (!term) {
-      var top = await fetchTop(deadline);
-      var empty = [];
-      for (var i = 0; i < top.length && empty.length < 30; i++) {
-        if (top[i].nsfw || !titleOf(top[i])) continue;
-        empty.push(cardOf(top[i]));
-      }
-      return empty;
-    }
-    var hits = await kitsuSearch(term, deadline);
-    var out = [], seen = {};
-    for (var h = 0; h < hits.length && out.length < 10; h++) {
-      if (now() >= deadline) break;
-      var kid = hits[h] && hits[h].id ? String(hits[h].id) : '';
-      if (!kid || seen[kid]) continue;
-      seen[kid] = true;
       try {
-        var a = await fetchAnimeById(kid, deadline);
+        var top = await fetchTop(deadline);
+        var empty = [];
+        for (var i = 0; i < top.length && empty.length < 30; i++) {
+          if (top[i].nsfw || !titleOf(top[i])) continue;
+          empty.push(cardOf(top[i]));
+        }
+        return empty;
+      } catch (_) {
+        return [];
+      }
+    }
+
+    var hits;
+    try {
+      hits = await kitsuSearch(term, deadline);
+    } catch (_) {
+      /* Kitsu unreachable/rate-limited: report "no result" instead of an error. */
+      return [];
+    }
+
+    var out = [], seen = {}, fallback = [], blocked = false;
+    /* Verify Kitsu hits against franime four at a time, keeping Kitsu order.
+     * 12 hits = 3 short rounds, comfortably inside the deadline. */
+    for (var h = 0; h < hits.length && out.length < 10 && now() < deadline - 400; h += 4) {
+      var batch = hits.slice(h, h + 4);
+      var results = await Promise.all(batch.map(async function (hit) {
+        var kid = hit && hit.id != null ? String(hit.id) : '';
+        if (!kid) return null;
+        try {
+          return { ok: true, anime: await fetchAnimeById(kid, deadline, 3500) };
+        } catch (e) {
+          return { ok: false, transient: !e || e.kind !== 'notfound', hit: hit };
+        }
+      }));
+      for (var j = 0; j < results.length; j++) {
+        var r = results[j];
+        if (!r) continue;
+        if (!r.ok) {
+          if (r.transient) {
+            blocked = true;
+            var fc = kitsuCardOf(r.hit);
+            if (fc && !seen['k:' + fc.id]) {
+              seen['k:' + fc.id] = true;
+              fallback.push(fc);
+            }
+          }
+          continue;
+        }
+        var a = r.anime;
         var fid = String(a.id);
-        if (seen['franime:' + fid]) continue;
-        seen['franime:' + fid] = true;
+        if (seen['f:' + fid]) continue;
+        seen['f:' + fid] = true;
         if (a.nsfw || !titleOf(a) || countEpisodes(a) < 1) continue;
         out.push(cardOf(a));
-      } catch (_) { /* not on franime: skip */ }
+        if (out.length >= 10) break;
+      }
     }
+    /* franime verification was blocked and nothing could be confirmed: return
+     * the Kitsu cards (same ids/source franime indexes) rather than failing. */
+    if (!out.length && blocked && fallback.length) return fallback.slice(0, 10);
     return out;
   }
 

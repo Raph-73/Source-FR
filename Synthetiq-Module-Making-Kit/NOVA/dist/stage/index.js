@@ -457,15 +457,22 @@
     for (var c = 0; c < candidates.length; c++) {
       var ct = titleTokens(candidates[c]);
       if (!ct.length) continue;
-      var missing = 0, matched = 0;
+      var missing = 0, matched = 0, numericMissing = 0;
       for (var j = 0; j < ct.length; j++) {
         if (sourceTokens[ct[j]]) matched++;
-        else missing++;
+        else {
+          missing++;
+          if (/^\d+$/.test(ct[j])) numericMissing++;
+        }
       }
-      if (!missing) return true;
+      /* Numbers in a title ("Scream 7", "Blade 2") are often absent from the
+       * source filename; they must not block a match on their own. The year
+       * check still rejects a same-name film from another decade. */
+      var hardMissing = missing - numericMissing;
+      if (!hardMissing && matched > 0) return true;
       var allowance = ct.length >= 5 ? 2 : ct.length >= 3 ? 1 : 0;
       var need = ct.length >= 5 ? 3 : ct.length >= 3 ? 2 : ct.length;
-      if (missing <= allowance && matched >= need) return true;
+      if (hardMissing <= allowance && matched >= need) return true;
     }
     return false;
   }
@@ -626,7 +633,7 @@
     return false;
   }
 
-  function packHls(valid) {
+  function packHls(valid, masterUrl) {
     valid.sort(function (a, b) {
       return (b.height - a.height) || (b.bandwidth - a.bandwidth) || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
     });
@@ -643,9 +650,14 @@
     for (var j = 0; j < list.length; j++) {
       var v = list[j];
       var label = v.height ? ('dub ' + v.height + 'p') : 'dub Auto';
-      var q = v.height ? (v.height + 'p') : 'Auto';
       streams.push(label, v.url);
       qualities.push({ label: label, height: v.height || undefined, url: v.url, headers: STREAM_HEADERS });
+    }
+    /* Adaptive option: the master playlist lets the player switch rendition on
+     * its own. Added last so the highest explicit quality stays the default. */
+    if (masterUrl && /^https:\/\//i.test(String(masterUrl)) && list.length > 1) {
+      streams.push('dub Auto (adaptatif)', masterUrl);
+      qualities.push({ label: 'dub Auto (adaptatif)', url: masterUrl, headers: STREAM_HEADERS });
     }
     var top = list[0];
     var topQ = top.height ? (top.height + 'p') : 'Auto';
@@ -685,7 +697,7 @@
     if (!variants.length) {
       if (validateMediaPlaylist(text)) {
         var single = [{ url: masterUrl, height: 0, bandwidth: 0 }];
-        var packedSingle = packHls(single);
+        var packedSingle = packHls(single, masterUrl);
         return packedSingle ? { ok: true, result: packedSingle } : { ok: false, error: 'Aucune qualité HLS lisible.' };
       }
       return { ok: false, error: 'Aucune qualité HLS lisible.' };
@@ -707,7 +719,7 @@
       for (j = 0; j < results.length; j++) if (results[j]) valid.push(results[j]);
     }
     if (!valid.length) return { ok: false, error: 'Aucune qualité HLS lisible.' };
-    var packed = packHls(valid);
+    var packed = packHls(valid, masterUrl);
     return packed ? { ok: true, result: packed } : { ok: false, error: 'Aucune qualité HLS lisible.' };
   }
 

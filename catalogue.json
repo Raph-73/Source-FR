@@ -3,12 +3,12 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 2,
-  "bundleFile": "bundles/Ney-Source-Bundle-2.zip",
+  "bundleVersion": 3,
+  "bundleFile": "bundles/Ney-Source-Bundle-3.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
-      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.6.zip",
       "presentation": {
         "category": "Anime",
         "purpose": "French (VOSTFR / VF) Anime",
@@ -18,15 +18,16 @@
           "sub",
           "dub"
         ],
-        "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+        "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
       },
       "changelog": [
+        "1.0.0-beta.6: High-resolution posters (original Kitsu artwork instead of the 284x402 thumbnails), a square 512x512 header icon, and search reworked to finish inside the app budget (9 s deadline, 4-way franime verification, Kitsu-card fallback when franime is rate-limited) so it no longer fails after a delay.",
         "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
         "1.0.0-beta.4: Previous Franime package (French anime catalogue with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution)."
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.3.zip",
+      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.4.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone",
@@ -38,6 +39,7 @@
         "iconUrl": "https://watchnova.win/icon-192.png"
       },
       "changelog": [
+        "1.0.0-beta.4: Quality picker now lists every HLS rendition exposed by the uqload source, highest first, plus an adaptive Auto option; numeric title suffixes no longer trigger a false source-mismatch block. The maximum quality still depends on the uploaded file.",
         "1.0.0-beta.3: Private repository identity SP-VID-9002-NOVA-STREAM allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
         "1.0.0-beta.2: Previous NOVA package (public catalogue with films, series, search, details, episodes and VF playback through public uqload embeds)."
       ]
@@ -73,11 +75,25 @@
       "retiredAtMs": 1793209318446
     },
     {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.5",
+      "sha256": "50d3d347999ae120a32d8a6cefc90dbc060dbe66eb094e937f991aee48f2a99b",
+      "retiredAtMs": 1793210945284
+    },
+    {
       "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
       "moduleId": "nova-streaming",
       "version": "1.0.0-beta.2",
       "sha256": "bc7a250fa47ca3e70e623a760fbf4e142dcd23d48dff5c81ab5714f039174601",
       "retiredAtMs": 1793209318446
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.3.zip",
+      "moduleId": "nova-streaming",
+      "version": "1.0.0-beta.3",
+      "sha256": "728c7afe3f5c2225d9d101708827093a2ded22f1f817de88aae407b41a1a883a",
+      "retiredAtMs": 1793210945284
     }
   ]
 }
