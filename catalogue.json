@@ -3,9 +3,6 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "defaultModules": {
-    "video": "franime-v1"
-  },
   "bundleVersion": 2,
   "bundleFile": "bundles/Ney-Source-Bundle-2.zip",
   "minAppVersion": "8.0.0",
@@ -52,35 +49,35 @@
       "moduleId": "franime-v1",
       "version": "1.0.0-beta.1",
       "sha256": "b2fd375eccc616a13f32cf44d7af2d3ad2ffd20444e166960b350fe07639811d",
-      "retiredAtMs": 1793208679350
+      "retiredAtMs": 1793209318446
     },
     {
       "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.2.zip",
       "moduleId": "franime-v1",
       "version": "1.0.0-beta.2",
       "sha256": "ab10ac1c5dc13545ad0383dad19d58fda6d349ee8e4c53799f6c123cb0e7e8d7",
-      "retiredAtMs": 1793208679350
+      "retiredAtMs": 1793209318446
     },
     {
       "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.3.zip",
       "moduleId": "franime-v1",
       "version": "1.0.0-beta.3",
       "sha256": "d3409854438ecf960d4b01eb4800fb440f2ae8523adebe794adb9404ac2e8d64",
-      "retiredAtMs": 1793208679350
+      "retiredAtMs": 1793209318446
     },
     {
       "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
       "moduleId": "franime-v1",
       "version": "1.0.0-beta.4",
       "sha256": "ce1e609fe423f0ee811896ef1b9426ed77095e35ac33c5afdbff22c0d55ddd42",
-      "retiredAtMs": 1793208679350
+      "retiredAtMs": 1793209318446
     },
     {
       "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
       "moduleId": "nova-streaming",
       "version": "1.0.0-beta.2",
       "sha256": "bc7a250fa47ca3e70e623a760fbf4e142dcd23d48dff5c81ab5714f039174601",
-      "retiredAtMs": 1793208679350
+      "retiredAtMs": 1793209318446
     }
   ]
 }

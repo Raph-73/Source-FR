@@ -3,7 +3,7 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1793208679350,
+  "publishedAtMs": 1793209318446,
   "bundle": {
     "version": 2,
     "minAppVersion": "8.0.0",
@@ -24,7 +24,7 @@
       "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
       "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
       "sha256": "50d3d347999ae120a32d8a6cefc90dbc060dbe66eb094e937f991aee48f2a99b",
-      "publishedAtMs": 1793208679350,
+      "publishedAtMs": 1793209318446,
       "changelog": [
         "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
         "1.0.0-beta.4: Previous Franime package (French anime catalogue with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution)."
@@ -53,7 +53,7 @@
       "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.3.zip",
       "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.3.zip",
       "sha256": "728c7afe3f5c2225d9d101708827093a2ded22f1f817de88aae407b41a1a883a",
-      "publishedAtMs": 1793208679350,
+      "publishedAtMs": 1793209318446,
       "changelog": [
         "1.0.0-beta.3: Private repository identity SP-VID-9002-NOVA-STREAM allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
         "1.0.0-beta.2: Previous NOVA package (public catalogue with films, series, search, details, episodes and VF playback through public uqload embeds)."
@@ -71,9 +71,5 @@
       "signature": ""
     }
   ],
-  "defaultModules": {
-    "video": "franime-v1"
-  },
-  "defaultModulesSignature": "",
   "signature": ""
 }
