@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "repositoryId": "ney-source",
+  "name": "Ney Source",
+  "enabled": true,
+  "minAppVersion": "8.0.0",
+  "modules": [
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
+      "presentation": {
+        "category": "Anime",
+        "purpose": "French (VOSTFR / VF) Anime",
+        "recommended": false,
+        "language": "French (VOSTFR / VF)",
+        "languages": [
+          "sub",
+          "dub"
+        ],
+        "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+      },
+      "changelog": [
+        "1.0.0-beta.4: Current package. French anime catalogue (franime.fr) with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution.",
+        "1.0.0-beta.1 to 1.0.0-beta.3: Earlier beta packages retained under Franime/dist for reference."
+      ]
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone",
+        "recommended": false,
+        "language": "Francais",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://watchnova.win/icon-192.png"
+      },
+      "changelog": [
+        "1.0.0-beta.2: Current package. Public NOVA catalogue (watchnova.win) with films, series, search, details, episodes and VF playback through public uqload embeds."
+      ]
+    }
+  ],
+  "retiredPackages": [
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.1.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.1",
+      "sha256": "b2fd375eccc616a13f32cf44d7af2d3ad2ffd20444e166960b350fe07639811d",
+      "retiredAtMs": 1793208071904
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.2.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.2",
+      "sha256": "ab10ac1c5dc13545ad0383dad19d58fda6d349ee8e4c53799f6c123cb0e7e8d7",
+      "retiredAtMs": 1793208071904
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.3.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.3",
+      "sha256": "d3409854438ecf960d4b01eb4800fb440f2ae8523adebe794adb9404ac2e8d64",
+      "retiredAtMs": 1793208071904
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "repositoryId": "ney-source",
+  "name": "Ney Source",
+  "enabled": true,
+  "publishedAtMs": 1793208071904,
+  "modules": [
+    {
+      "moduleId": "franime-v1",
+      "moduleFamilyId": "franime_v1",
+      "moduleIdentity": "PENDING-OWNER-ALLOCATION",
+      "moduleIdentityNumber": 0,
+      "contentType": "video",
+      "version": "1.0.0-beta.4",
+      "minAppVersion": "8.0.0",
+      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
+      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
+      "sha256": "ce1e609fe423f0ee811896ef1b9426ed77095e35ac33c5afdbff22c0d55ddd42",
+      "publishedAtMs": 1793208071904,
+      "changelog": [
+        "1.0.0-beta.4: Current package. French anime catalogue (franime.fr) with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution.",
+        "1.0.0-beta.1 to 1.0.0-beta.3: Earlier beta packages retained under Franime/dist for reference."
+      ],
+      "presentation": {
+        "category": "Anime",
+        "purpose": "French (VOSTFR / VF) Anime",
+        "recommended": false,
+        "language": "French (VOSTFR / VF)",
+        "languages": [
+          "sub",
+          "dub"
+        ],
+        "iconUrl": "https://franime.fr/_next/static/media/logo.53043f7d.png"
+      }
+    },
+    {
+      "moduleId": "nova-streaming",
+      "moduleFamilyId": "nova_streaming_v1",
+      "moduleIdentity": "PENDING-OWNER-ALLOCATION",
+      "moduleIdentityNumber": 0,
+      "contentType": "video",
+      "version": "1.0.0-beta.2",
+      "minAppVersion": "8.0.0",
+      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
+      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
+      "sha256": "bc7a250fa47ca3e70e623a760fbf4e142dcd23d48dff5c81ab5714f039174601",
+      "publishedAtMs": 1793208071904,
+      "changelog": [
+        "1.0.0-beta.2: Current package. Public NOVA catalogue (watchnova.win) with films, series, search, details, episodes and VF playback through public uqload embeds."
+      ],
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone",
+        "recommended": false,
+        "language": "Francais",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://watchnova.win/icon-192.png"
+      }
+    }
+  ]
+}
