@@ -1,0 +1,45 @@
+{
+  "id": "nova-streaming",
+  "name": "Nova Stream",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.3",
+  "version": "1.0.0-beta.3",
+  "moduleFamilyId": "nova_streaming_v1",
+  "moduleIdentity": "SP-VID-9002-NOVA-STREAM",
+  "moduleIdentityNumber": 9002,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "description": "Catalogue public NOVA (watchnova.win) : films et series, recherche, fiches, episodes et decouverte. Lecture VF via les embeds publics uqload. Les titres premium, la beta fermee HeiwaStream et les sources dont le titre ne correspond pas sont bloques. VOSTFR non disponible via cette route.",
+  "presentation": {
+    "category": "Films & Series",
+    "purpose": "Catalogue francophone",
+    "recommended": false,
+    "language": "Francais",
+    "languages": [
+      "dub"
+    ],
+    "iconUrl": "https://watchnova.win/icon-192.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 4
+    },
+    "baseUrl": "https://watchnova.win",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Referer": "https://uqload.vc/",
+      "Origin": "https://uqload.vc"
+    }
+  }
+}

@@ -3,23 +3,31 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1793208409123,
+  "publishedAtMs": 1793208679350,
+  "bundle": {
+    "version": 2,
+    "minAppVersion": "8.0.0",
+    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-2.zip",
+    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-2.zip",
+    "sha256": "f2d54ae013bed441a98ce52ee5b2652db09dbcd800dfefae2b9db09810df9a69",
+    "signature": ""
+  },
   "modules": [
     {
       "moduleId": "franime-v1",
       "moduleFamilyId": "franime_v1",
-      "moduleIdentity": "PENDING-OWNER-ALLOCATION",
-      "moduleIdentityNumber": 0,
+      "moduleIdentity": "SP-VID-9001-FRANIME",
+      "moduleIdentityNumber": 9001,
       "contentType": "video",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "minAppVersion": "8.0.0",
-      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
-      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.4.zip",
-      "sha256": "ce1e609fe423f0ee811896ef1b9426ed77095e35ac33c5afdbff22c0d55ddd42",
-      "publishedAtMs": 1793208409123,
+      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
+      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
+      "sha256": "50d3d347999ae120a32d8a6cefc90dbc060dbe66eb094e937f991aee48f2a99b",
+      "publishedAtMs": 1793208679350,
       "changelog": [
-        "1.0.0-beta.4: Current package. French anime catalogue (franime.fr) with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution.",
-        "1.0.0-beta.1 to 1.0.0-beta.3: Earlier beta packages retained under Franime/dist for reference."
+        "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
+        "1.0.0-beta.4: Previous Franime package (French anime catalogue with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution)."
       ],
       "presentation": {
         "category": "Anime",
@@ -37,17 +45,18 @@
     {
       "moduleId": "nova-streaming",
       "moduleFamilyId": "nova_streaming_v1",
-      "moduleIdentity": "PENDING-OWNER-ALLOCATION",
-      "moduleIdentityNumber": 0,
+      "moduleIdentity": "SP-VID-9002-NOVA-STREAM",
+      "moduleIdentityNumber": 9002,
       "contentType": "video",
-      "version": "1.0.0-beta.2",
+      "version": "1.0.0-beta.3",
       "minAppVersion": "8.0.0",
-      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
-      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.2.zip",
-      "sha256": "bc7a250fa47ca3e70e623a760fbf4e142dcd23d48dff5c81ab5714f039174601",
-      "publishedAtMs": 1793208409123,
+      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.3.zip",
+      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/NOVA/dist/NovaStream-1.0.0-beta.3.zip",
+      "sha256": "728c7afe3f5c2225d9d101708827093a2ded22f1f817de88aae407b41a1a883a",
+      "publishedAtMs": 1793208679350,
       "changelog": [
-        "1.0.0-beta.2: Current package. Public NOVA catalogue (watchnova.win) with films, series, search, details, episodes and VF playback through public uqload embeds."
+        "1.0.0-beta.3: Private repository identity SP-VID-9002-NOVA-STREAM allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
+        "1.0.0-beta.2: Previous NOVA package (public catalogue with films, series, search, details, episodes and VF playback through public uqload embeds)."
       ],
       "presentation": {
         "category": "Films & Series",
@@ -62,14 +71,6 @@
       "signature": ""
     }
   ],
-  "bundle": {
-    "version": 1,
-    "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-1.zip",
-    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-1.zip",
-    "sha256": "0e0482a9c9d782d477652240060b9f9d48db7c792291dabf5f354c383d73efbf",
-    "signature": ""
-  },
   "defaultModules": {
     "video": "franime-v1"
   },
