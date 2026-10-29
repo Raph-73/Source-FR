@@ -380,14 +380,14 @@
     if (banner) card.banner = banner;
     return card;
   }
-  /* Hero slots show the wide Kitsu cover (1981-2048 px), the artwork the home
-   * header was built around. Grid cards and detail pages keep the portrait
-   * poster, which is the only artwork that fits their poster-shaped frames. */
+  /* The home header is a full-screen portrait frame. When a card carries
+   * `backdrop`, the app paints that artwork there, and a 2.7-4.2:1 Kitsu cover
+   * is crop-filled down to an unreadable centre slice (only the rare 16:9 cover
+   * survives). Hero cards therefore keep the portrait poster as `image` and
+   * only expose the wide cover as `banner`, which is the combination that
+   * rendered correctly. */
   function heroCardOf(a) {
-    var card = cardOf(a);
-    var banner = bannerOf(a);
-    if (banner) { card.image = banner; card.backdrop = banner; }
-    return card;
+    return cardOf(a);
   }
 
   async function fetchAnimeById(id, deadline, cap) {
@@ -617,11 +617,8 @@
       id: String(a.id), href: String(a.id), url: SITE + '/anime/' + String(a.id),
       title: card.title, originalTitle: alt,
       description: clean(a.description || ''), synopsis: clean(a.description || ''),
-      /* The detail artwork frame is poster-shaped like the home hero: the
-       * portrait original is the only artwork shown whole. The wide Kitsu
-       * cover stays exposed as banner/backdrop for layouts that use one. */
       image: poster || banner, poster: poster || banner,
-      banner: banner, backdrop: banner,
+      banner: banner,
       year: yearOf(a), format: String(a.format || ''), status: String(a.status || ''),
       genres: genres, rating: a.note != null ? String(a.note) : '',
       type: 'video'

@@ -2,10 +2,11 @@
  * CineRegal — Synthetiq Player (contract v4)
  * ----------------------------------------------------------------------------
  * Catalogue + metadata: the site's own TMDB proxy (/api/tmdb) in fr-FR.
- * Playback: the site's public HD reader (fluxora.sbs) — the embed resolves a
- * signed HLS gateway through two public endpoints; the gateway link is read
- * from the embed page and validated (real media playlist, no encryption).
- * Nothing gated is forged: when the reader has no source, we fail closed.
+ * Playback: Vidzy (vidzy.org), the site's first player, is resolved from the
+ * embed's signed HLS master and returns first. That master is fingerprint-
+ * filtered at the CDN (browsers get it, server HTTP stacks get a decoy), so
+ * the module never rejects it on a probe; HD (fluxora.sbs) and moviez stay as
+ * labelled fallbacks. Every picker entry carries its player name.
  * ==========================================================================*/
 
 (function () {
@@ -462,8 +463,9 @@
   }
 
   /* ------------------------------------------------------ reader composition */
-  /* Every reader is exposed in the app's Quality picker, so the viewer picks a
-   * player and a rendition in the same list. The first reader is the default. */
+  /* The picker labels are built here, so they are NOT dropped by the app: an
+   * entry that carries a height is relabelled from that height ("480p") and
+   * loses its player name. Heights are therefore shown in the label only. */
   function readerLabel(reader) {
     return reader.player + (reader.lang === 'sub' ? ' VOSTFR' : '');
   }
@@ -481,7 +483,7 @@
         var label = prefix + ' \u00b7 ' + q.label;
         if (labels[label]) continue;
         labels[label] = true;
-        entries.push({ label: label, height: q.height, url: q.url, headers: q.headers || reader.packed.headers });
+        entries.push({ label: label, url: q.url, headers: q.headers || reader.packed.headers });
         streams.push(label, q.url);
       }
     }
@@ -518,9 +520,13 @@
   }
 
   /* ------------------------------------------------------------- vidzy reader */
-  /* Vidzy is the site's first player. Its CDN signs every HLS request with a
-   * short-lived key from its own public gate; the playlist is only accepted
-   * after the media rendition and its first segment answer as real media. */
+  /* Vidzy is the site's own first player. Its page embeds a videojs player
+   * whose `sources` entry is a signed HLS master. The CDN filters that master
+   * by client fingerprint: browsers get the real playlist, server-side HTTP
+   * stacks get a 177-byte decoy that loops on index.m3u8. The module never
+   * rejects Vidzy because of that probe -- when the probe happens to return
+   * the real master the ladder is exposed, otherwise the signed master is
+   * handed to the app's player, which runs on the device network stack. */
   function vidzyPageUrl(ref) {
     if (ref.type === 'tv') {
       return VIDZY + '/serie/' + encodeURIComponent(ref.id) + '/' + (ref.season || 1) + '/' + (ref.episode || 1) + '/vf';
@@ -541,88 +547,47 @@
     return m[1];
   }
 
-  function withGk(url, gk) {
-    if (!gk || String(url).indexOf('gk=') !== -1) return String(url);
-    return String(url) + (String(url).indexOf('?') === -1 ? '?' : '&') + 'gk=' + encodeURIComponent(gk);
-  }
-
-  async function vidzyGate(embedHtml, embedUrl, deadline) {
-    var m = String(embedHtml == null ? '' : embedHtml).match(/(https:\/\/[a-z0-9.-]+\/gate\.php)/i);
-    var gate = m ? m[1] : 'https://v6.vidzy.cc/gate.php';
-    var qs = '?cw=88.01&cw2=84.01&wg=1&dpr=2&sw=390&hw=8&ft=TOP&rf=vidzy.org';
-    var r = await fetchJson(gate + qs, merge(JSON_HEADERS, {
-      'Accept': '*/*', 'Referer': embedUrl, 'Origin': 'https://vidzy.cc'
-    }), left(deadline, 6000));
-    return r.data && r.data.gk ? String(r.data.gk) : '';
-  }
-
-  function firstSegmentOf(text, baseUrl) {
-    var lines = String(text == null ? '' : text).split(/\r?\n/), expect = false;
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].replace(/^\s+|\s+$/g, '');
-      if (!line) continue;
-      if (/^#EXTINF:/i.test(line)) { expect = true; continue; }
-      if (line.charAt(0) === '#') continue;
-      if (expect) return resolveUrl(baseUrl, line);
-    }
-    return '';
-  }
-
-  async function segmentIsMedia(mediaUrl, text, headers, deadline) {
-    var seg = firstSegmentOf(text, mediaUrl);
-    if (!seg) return false;
-    try {
-      var r = await fetchText(seg, headers, left(deadline, 5000));
-      var type = String((r.headers && (r.headers['content-type'] || r.headers['Content-Type'])) || '');
-      if (r.status !== 200 && r.status !== 206) return false;
-      return !/mpegurl|text\/html/i.test(type);
-    } catch (_) {
-      return false;
-    }
-  }
-
   async function resolveVidzy(ref, deadline) {
     var pageUrl = vidzyPageUrl(ref);
-    var page = await fetchText(pageUrl, merge(HTML_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 7000));
+    var page = await fetchText(pageUrl, merge(HTML_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 6000));
     if (page.status !== 200 || !page.text) return null;
     var embedUrl = vidzyEmbedOf(page.text);
     if (!embedUrl) return null;
 
-    var emb = await fetchText(embedUrl, merge(HTML_HEADERS, { 'Referer': VIDZY + '/' }), left(deadline, 7000));
+    var emb = await fetchText(embedUrl, merge(HTML_HEADERS, { 'Referer': VIDZY + '/' }), left(deadline, 6000));
     if (emb.status !== 200 || !emb.text) return null;
     var src = vidzySourceOf(emb.text);
     if (!src) return null;
 
-    var gk = await vidzyGate(emb.text, embedUrl, deadline);
     var headers = merge(VIDZY_STREAM_HEADERS, { 'Referer': embedUrl });
-    var masterUrl = withGk(src, gk);
+    var packed = null;
 
-    var master = await fetchText(masterUrl, merge(headers, { 'Accept': 'application/vnd.apple.mpegurl,*/*' }), left(deadline, 7000));
-    var text = normalizePlaylist(master.text);
-    if (master.status !== 200 || text.indexOf('#EXTM3U') !== 0) return null;
-    if (/#EXT-X-KEY\s*:[^\n]*METHOD\s*=\s*(?!NONE)/i.test(text)) return null;
+    /* Best effort only: the module's own HTTP stack usually gets the decoy,
+     * while the device player uses the same signed URL on a native stack. */
+    try {
+      var master = await fetchText(src, merge(headers, { 'Accept': 'application/vnd.apple.mpegurl,*/*' }), left(deadline, 4500));
+      var text = normalizePlaylist(master.text);
+      if (master.status === 200 && text.indexOf('#EXTM3U') === 0) {
+        var variants = parseMaster(text, src);
+        var decoy = variants.length === 1 && /\/index\.m3u8(?:\?|$)/i.test(variants[0].url);
+        if (variants.length && !decoy) packed = packHls(variants, src, { headers: headers, lang: 'dub' });
+      }
+    } catch (_) { /* hand the unparsed master to the player */ }
 
-    var variants = parseMaster(text, masterUrl);
-    var valid = [];
-    for (var i = 0; i < variants.length; i++) {
-      var vurl = withGk(variants[i].url, gk);
-      var vr = await fetchText(vurl, merge(headers, { 'Accept': 'application/vnd.apple.mpegurl,*/*' }), left(deadline, 6000));
-      if (vr.status !== 200 || !isMediaPlaylist(vr.text)) continue;
-      if (!(await segmentIsMedia(vurl, vr.text, headers, deadline))) continue;
-      valid.push({ url: vurl, height: variants[i].height, bandwidth: variants[i].bandwidth });
+    if (!packed) {
+      packed = {
+        streams: ['Auto (adaptatif)', src],
+        url: src,
+        headers: headers,
+        streamType: 'hls',
+        quality: 'Auto (adaptatif)',
+        defaultQuality: 'Auto (adaptatif)',
+        qualities: [{ label: 'Auto (adaptatif)', url: src, headers: headers }],
+        subtitles: [],
+        lang: 'dub'
+      };
     }
-
-    if (valid.length) {
-      var packed = packHls(valid, withGk(masterUrl, gk), { headers: headers, lang: 'dub' });
-      if (packed) return { player: 'Vidzy', lang: 'dub', packed: packed };
-      return null;
-    }
-
-    if (isMediaPlaylist(text) && (await segmentIsMedia(masterUrl, text, headers, deadline))) {
-      var single = packHls([{ url: masterUrl, height: 0, bandwidth: 0 }], null, { headers: headers, lang: 'dub' });
-      if (single) return { player: 'Vidzy', lang: 'dub', packed: single };
-    }
-    return null;
+    return { player: 'Vidzy', lang: 'dub', packed: packed };
   }
 
   /* ------------------------------------------------------- fluxora HD reader */
@@ -850,8 +815,10 @@
     if (!ref) return streamFail('CineRegal : identifiant invalide.');
     if (ref.type === 'tv' && (!ref.season || !ref.episode)) { ref.season = ref.season || 1; ref.episode = ref.episode || 1; }
 
-    /* Readers run concurrently, each with its own budget; Vidzy is the site's
-     * default player and stays first in the picker when it answers. */
+    /* Vidzy is the site's default player and comes first. The other readers
+     * stay as labelled fallbacks: Vidzy's own files cap at 360-448p, so on a
+     * title where HD has a taller rendition the viewer can still pick it,
+     * and a title Vidzy does not carry still plays. */
     var settled = await Promise.all([
       resolveVidzy(ref, now() + 11000).catch(function () { return null; }),
       resolveFluxora(ref, now() + 13000).catch(function () { return null; }),
@@ -866,7 +833,7 @@
 
     var composed = composeReaders(readers);
     if (composed) return composed;
-    return streamFail('CineRegal : le lecteur HD n\'a pas fourni de flux lisible pour ce titre. Reessayez plus tard ou choisissez un autre titre.');
+    return streamFail('CineRegal : aucun lecteur n\'a fourni de flux pour ce titre. Reessayez plus tard ou choisissez un autre titre.');
   }
 
   /* -------------------------------------------------------------- discovery */
