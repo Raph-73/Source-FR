@@ -1,12 +1,12 @@
 # Runbook — index de dépôt Synthetiq qui s'importe
 
-Dernière validation : 28 octobre 2026, app Synthetiq 8.x, dépôt `ney73/Ney-source`.
+Dernière validation : 28 octobre 2026, app Synthetiq 8.x, dépôt `Raph-73/Source-FR`.
 Les deux modules (Franime et Nova Stream) s'importent et fonctionnent avec cette structure.
 
 URL à importer :
 
 ```
-https://raw.githubusercontent.com/ney73/Ney-source/main/repository.json
+https://raw.githubusercontent.com/Raph-73/Source-FR/main/repository.json
 ```
 
 Avant tout push, lancer :
@@ -34,8 +34,8 @@ la cohérence manifeste/index et le contenu du bundle. Il ne teste pas la lectur
   "bundle": {
     "version": 2,
     "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-2.zip",
-    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-2.zip",
+    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-2.zip",
+    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-2.zip",
     "sha256": "<sha256 du bundle>",
     "signature": ""
   },
@@ -48,8 +48,8 @@ la cohérence manifeste/index et le contenu du bundle. Il ne teste pas la lectur
       "contentType": "video",
       "version": "1.0.0-beta.5",
       "minAppVersion": "8.0.0",
-      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
-      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
+      "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
+      "packagePath": "/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.5.zip",
       "sha256": "<sha256 du zip>",
       "publishedAtMs": 1793209318446,
       "changelog": ["..."],
