@@ -3,13 +3,13 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1793268918829,
+  "publishedAtMs": 1793273602676,
   "bundle": {
-    "version": 6,
+    "version": 7,
     "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-6.zip",
-    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-6.zip",
-    "sha256": "9139f14f6b0e1f3d8be252de5246c83b5ae2dd743283acff026ddd6611108778",
+    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-7.zip",
+    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-7.zip",
+    "sha256": "6bcda5d7b941b731cf2ad5e753582a4b3d4da987cd7a8a459b09452565174f74",
     "signature": ""
   },
   "modules": [
@@ -81,13 +81,14 @@
       "moduleIdentity": "SP-VID-9003-CINEREGAL",
       "moduleIdentityNumber": 9003,
       "contentType": "video",
-      "version": "1.0.0-beta.1",
+      "version": "1.0.0-beta.2",
       "minAppVersion": "8.0.0",
-      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.1.zip",
-      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.1.zip",
-      "sha256": "b3664cf775082f1b3b24d4e03b5733c47361aa9634295768b734891797c6ab2d",
-      "publishedAtMs": 1793213890865,
+      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.2.zip",
+      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.2.zip",
+      "sha256": "7c226046eda69447869351c0e9acf364707ea3b15792a772404bdfecc837a86a",
+      "publishedAtMs": 1793273602676,
       "changelog": [
+        "1.0.0-beta.2: Playback now starts on the titles the HD reader does not index. The resolver reads the reader session id from its own script, tries every announced source in availability order (including the one it first flags unverified), waits out the warming answer instead of mistaking it for a failure, follows the HLS proxy player used by recent releases, and stops rejecting playable playlists because of a host-name check. When the HD reader has no usable lane, the moviez source of the same catalogue takes over in VF (VOSTFR when VF is missing). Popular titles that used to end on \"le lecteur HD n a pas fourni de flux lisible\" now play.",
         "1.0.0-beta.1: New CineRegal module (cineregal.onl): French TMDB catalogue with multi search, details, seasons/episodes and discovery (trending, popular, top rated). Playback goes through the site's public HD reader (fluxora.sbs): the signed HLS gateway is resolved from the embed page, validated, and every available rendition is exposed highest first. Titles without an available source fail with an explicit message."
       ],
       "presentation": {
@@ -96,7 +97,8 @@
         "recommended": false,
         "language": "Francais (VF)",
         "languages": [
-          "dub"
+          "dub",
+          "sub"
         ],
         "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
       },

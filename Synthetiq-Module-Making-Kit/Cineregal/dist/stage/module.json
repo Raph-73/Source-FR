@@ -3,21 +3,22 @@
   "name": "CineRegal",
   "contentType": "video",
   "contractVersion": 4,
-  "moduleVersion": "1.0.0-beta.1",
-  "version": "1.0.0-beta.1",
+  "moduleVersion": "1.0.0-beta.2",
+  "version": "1.0.0-beta.2",
   "moduleFamilyId": "cineregal_v1",
   "moduleIdentity": "SP-VID-9003-CINEREGAL",
   "moduleIdentityNumber": 9003,
   "releaseTrack": "beta",
   "moduleStatus": "trial",
-  "description": "Catalogue public CineRegal (cineregal.onl) : films et series en VF, recherche TMDB en francais, fiches detaillees, saisons et episodes, et decouverte (tendances, films et series populaires, mieux notes). Lecture via le lecteur HD public fluxora.sbs : le module resout le lien HLS signe depuis la page d'embed, verifie la playlist et expose les qualites reellement presentes (la plus haute par defaut). Un titre sans source disponible est refuse avec un message explicite : aucune lecture n'est inventee.",
+  "description": "Catalogue public CineRegal (cineregal.onl) : films et series en VF, recherche TMDB en francais, fiches detaillees, saisons et episodes, et decouverte (tendances, films et series populaires, mieux notes). Lecture multi-lecteurs : le lecteur HD public fluxora.sbs est interroge source par source, puis la source moviez prend le relais pour les titres absents du HD. Le module verifie la playlist HLS reellement servie et expose les qualites presentes (la plus haute par defaut). Un titre sans source disponible est refuse avec un message explicite : aucune lecture n'est inventee.",
   "presentation": {
     "category": "Films & Series",
     "purpose": "Catalogue francophone (VF)",
     "recommended": false,
     "language": "Francais (VF)",
     "languages": [
-      "dub"
+      "dub",
+      "sub"
     ],
     "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
   },

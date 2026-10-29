@@ -14,13 +14,14 @@
   var SITE = 'https://cineregal.onl';
   var API = SITE + '/api/tmdb';
   var FLUX = 'https://fluxora.sbs';
-  var STREAM_HOST = 'stream.fluxora.sbs';
   var IMG = 'https://image.tmdb.org/t/p';
   var UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
+  var MOVIEZ = 'https://api.moviez.ac';
   var JSON_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var HTML_HEADERS = { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var STREAM_HEADERS = { 'User-Agent': UA, 'Referer': FLUX + '/' };
+  var MOVIEZ_STREAM_HEADERS = { 'User-Agent': UA, 'Referer': MOVIEZ + '/' };
 
   var FEEDS = {
     trending: { path: '/trending/all/week', kind: 'mixed' },
@@ -388,7 +389,7 @@
       }
       if (!uri) continue;
       var url = resolveUrl(baseUrl, uri);
-      if (url.indexOf('https://' + STREAM_HOST + '/') !== 0) continue;
+      if (!/^https:\/\//i.test(url)) continue;
       var res = String(attrs.RESOLUTION || '').match(/(\d+)\s*x\s*(\d+)/i);
       out.push({
         url: url,
@@ -411,7 +412,9 @@
     return height + 'p';
   }
 
-  function packHls(list, masterUrl) {
+  function packHls(list, masterUrl, opts) {
+    var headers = (opts && opts.headers) || STREAM_HEADERS;
+    var lang = (opts && opts.lang) || 'dub';
     list.sort(function (a, b) {
       return (b.height - a.height) || (b.bandwidth - a.bandwidth) || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
     });
@@ -431,24 +434,24 @@
       if (labels[label]) continue;
       labels[label] = true;
       streams.push(label, v.url);
-      qualities.push({ label: label, height: v.height || undefined, url: v.url, headers: STREAM_HEADERS });
+      qualities.push({ label: label, height: v.height || undefined, url: v.url, headers: headers });
     }
     if (masterUrl && uniq.length > 1) {
       streams.push('Auto (adaptatif)', masterUrl);
-      qualities.push({ label: 'Auto (adaptatif)', url: masterUrl, headers: STREAM_HEADERS });
+      qualities.push({ label: 'Auto (adaptatif)', url: masterUrl, headers: headers });
     }
     var top = uniq[0];
     var quality = top.height ? tierLabel(top.height) : 'Auto';
     return {
       streams: streams,
       url: top.url,
-      headers: STREAM_HEADERS,
+      headers: headers,
       streamType: 'hls',
       quality: quality,
       defaultQuality: quality,
       qualities: qualities,
       subtitles: [],
-      lang: 'dub'
+      lang: lang
     };
   }
 
@@ -458,14 +461,44 @@
 
   /* ------------------------------------------------------- fluxora HD reader */
   function parseInitialPlay(html) {
-    var m = String(html == null ? '' : html).match(/INITIAL_PLAY\s*=\s*(\{[\s\S]*?\});/);
+    var m = String(html == null ? '' : html).match(/INITIAL_PLAY\s*=\s*(\{[\s\S]*?\}|null)\s*;/);
     if (!m) return null;
+    if (m[1] === 'null') return null;
     try { return JSON.parse(m[1]); } catch (_) { return null; }
   }
 
-  function sidFromUrl(url) {
-    var m = String(url == null ? '' : url).match(/[?&]embed_sid=([A-Za-z0-9]+)/);
-    return m ? m[1] : '';
+  function parseSourceChoices(html) {
+    var src = String(html == null ? '' : html);
+    var m = src.match(/INITIAL_SOURCE_CHOICES\s*=\s*(\[[\s\S]*?\])\s*;/);
+    if (!m) return [];
+    var list;
+    try { list = JSON.parse(m[1]); } catch (_) { return []; }
+    if (!Array.isArray(list)) return [];
+    var rank = { available: 0, unknown: 1 };
+    var out = [], i;
+    for (i = 0; i < list.length; i++) {
+      var c = list[i] || {};
+      var id = String(c.id || '');
+      if (!id) continue;
+      var state = String(c.status || 'unknown');
+      if (state !== 'available' && state !== 'unknown') continue;
+      if (c.selectable === false && state !== 'available') continue;
+      out.push({ id: id, rank: rank[state] });
+    }
+    out.sort(function (a, b) { return a.rank - b.rank; });
+    return out.map(function (c) { return c.id; });
+  }
+
+  function sidFromHtml(html, play) {
+    var src = String(html == null ? '' : html);
+    var m = src.match(/SID\s*=\s*["']([A-Za-z0-9]+)["']/) ||
+      src.match(/[?&]embed_sid=([A-Za-z0-9]+)/);
+    if (m) return m[1];
+    if (play && play.stream_url) {
+      var s = String(play.stream_url).match(/[?&]embed_sid=([A-Za-z0-9]+)/);
+      if (s) return s[1];
+    }
+    return '';
   }
 
   function decodeEncSource(html) {
@@ -477,23 +510,48 @@
     return /^https:\/\//i.test(decoded) ? decoded.trim() : '';
   }
 
+  function isFluxoraUrl(url) {
+    var m = String(url == null ? '' : url).match(/^https:\/\/([^\/?#]+)/i);
+    if (!m) return false;
+    return /(^|\.)fluxora\.sbs$/i.test(m[1]);
+  }
+
+  /* The sandbox has no setTimeout: a bounded synchronous spin is the only wait. */
+  function pause(ms) {
+    var until = now() + Math.max(0, ms || 0);
+    while (now() < until) { /* spin */ }
+  }
+
   async function postPlay(sid, lane, deadline) {
     if (!sid) return null;
     var body = JSON.stringify({ sid: sid, lang: 'vf', embed_mobile: 0, source: lane });
-    try {
-      var r = await fetchJson(
-        FLUX + '/api/embed-player/play?reader_source=' + encodeURIComponent(lane),
-        merge(JSON_HEADERS, { 'Content-Type': 'application/json', 'Referer': FLUX + '/embed/zenix' }),
-        left(deadline, 9000), 'POST', body
-      );
-      if (r.data && r.data.ok && r.data.stream_url) return r.data;
-    } catch (_) { /* lane unavailable */ }
+    var waits = [0, 250, 500];
+    for (var attempt = 0; attempt < waits.length; attempt++) {
+      if (attempt > 0) pause(waits[attempt]);
+      if (now() >= deadline - 1500) return null;
+      var r = null;
+      try {
+        r = await fetchJson(
+          FLUX + '/api/embed-player/play?reader_source=' + encodeURIComponent(lane),
+          merge(JSON_HEADERS, { 'Content-Type': 'application/json', 'Referer': FLUX + '/embed/zenix' }),
+          left(deadline, 9000), 'POST', body
+        );
+      } catch (_) {
+        return null;
+      }
+      var data = (r && r.data) || null;
+      if (data && data.ok && data.stream_url) return data;
+      var err = data ? String(data.error || '') : '';
+      if (r && r.status === 202 && err === 'warming') continue;
+      return null;
+    }
     return null;
   }
 
-  async function packFromPlaylist(hlsUrl, deadline) {
-    if (String(hlsUrl).indexOf('https://' + STREAM_HOST + '/') !== 0) return null;
-    var r = await fetchText(hlsUrl, STREAM_HEADERS, left(deadline, 9000));
+  async function packFromPlaylist(hlsUrl, deadline, headers, lang) {
+    if (!/^https:\/\//i.test(String(hlsUrl))) return null;
+    var hdrs = headers || STREAM_HEADERS;
+    var r = await fetchText(hlsUrl, hdrs, left(deadline, 9000));
     var text = normalizePlaylist(r.text);
     if (r.status !== 200 || text.indexOf('#EXTM3U') !== 0) return null;
     if (/#EXT-X-KEY\s*:[^\n]*METHOD\s*=\s*(?!NONE)/i.test(text)) return null;
@@ -505,7 +563,7 @@
         var batch = variants.slice(i, i + 4);
         var results = await Promise.all(batch.map(async function (v) {
           try {
-            var vr = await fetchText(v.url, STREAM_HEADERS, left(deadline, 6000));
+            var vr = await fetchText(v.url, hdrs, left(deadline, 6000));
             if (vr.status !== 200 || !isMediaPlaylist(vr.text)) return null;
             return { url: v.url, height: v.height, bandwidth: v.bandwidth };
           } catch (_) {
@@ -515,11 +573,19 @@
         for (var j = 0; j < results.length; j++) if (results[j]) valid.push(results[j]);
       }
       /* A master without any readable rendition is not playable. */
-      return valid.length ? packHls(valid, hlsUrl) : null;
+      return valid.length ? packHls(valid, hlsUrl, { headers: hdrs, lang: lang }) : null;
     }
 
-    if (isMediaPlaylist(text)) return packHls([{ url: hlsUrl, height: 0, bandwidth: 0 }], null);
+    if (isMediaPlaylist(text)) return packHls([{ url: hlsUrl, height: 0, bandwidth: 0 }], null, { headers: hdrs, lang: lang });
     return null;
+  }
+
+  async function probeWrapper(streamUrl, embed, deadline, opts) {
+    var streamPage = await fetchText(streamUrl, merge(HTML_HEADERS, { 'Referer': embed }), left(deadline, 8000));
+    if (streamPage.status !== 200 || !streamPage.text) return null;
+    var hls = decodeEncSource(streamPage.text);
+    if (!hls || !isFluxoraUrl(hls)) return null;
+    return packFromPlaylist(hls, deadline, (opts && opts.headers) || STREAM_HEADERS, (opts && opts.lang) || 'dub');
   }
 
   async function tryFluxoraOnce(ref, deadline) {
@@ -530,37 +596,37 @@
     var page = await fetchText(embed, merge(HTML_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 9000));
     if (page.status !== 200 || !page.text) return null;
     var play = parseInitialPlay(page.text);
-    if (!play || play.ok === false) return null;
+    if (play && play.ok === false) play = null;
 
-    var sid = sidFromUrl(play.stream_url) || (page.text.match(/embed_sid=([A-Za-z0-9]+)/) || [])[1] || '';
-    var lanes = [];
-    if (play.provider) lanes.push(String(play.provider));
-    if (Array.isArray(play.sources)) {
-      for (var i = 0; i < play.sources.length; i++) {
-        var laneId = String((play.sources[i] && play.sources[i].id) || '');
-        if (!laneId || play.sources[i].available === false) continue;
-        if (lanes.indexOf(laneId) === -1) lanes.push(laneId);
+    var sid = sidFromHtml(page.text, play);
+
+    if (play && play.stream_url) {
+      var direct = await probeWrapper(String(play.stream_url), embed, deadline);
+      if (direct) return direct;
+    }
+
+    var lanes = parseSourceChoices(page.text);
+    if (!lanes.length) {
+      if (play && play.provider) lanes.push(String(play.provider));
+      if (play && Array.isArray(play.sources)) {
+        for (var i = 0; i < play.sources.length; i++) {
+          var laneId = String((play.sources[i] && play.sources[i].id) || '');
+          if (!laneId || play.sources[i].available === false) continue;
+          if (lanes.indexOf(laneId) === -1) lanes.push(laneId);
+        }
       }
     }
     if (!lanes.length) lanes.push('s1');
-    lanes = lanes.slice(0, 2);
 
-    for (var l = 0; l < lanes.length; l++) {
-      if (now() >= deadline - 1200) break;
-      var streamUrl = '';
-      if (l === 0 && play.stream_url) streamUrl = String(play.stream_url);
-      else {
-        var played = await postPlay(sid, lanes[l], deadline);
-        if (played) streamUrl = String(played.stream_url || '');
-      }
-      if (!streamUrl) continue;
-
-      var streamPage = await fetchText(streamUrl, merge(HTML_HEADERS, { 'Referer': embed }), left(deadline, 8000));
-      if (streamPage.status !== 200 || !streamPage.text) continue;
-      var hls = decodeEncSource(streamPage.text);
-      if (!hls) continue;
-
-      var packed = await packFromPlaylist(hls, deadline);
+    var tried = {}, count = 0;
+    for (var l = 0; l < lanes.length && count < 4; l++) {
+      if (now() >= deadline - 2500) break;
+      if (tried[lanes[l]]) continue;
+      tried[lanes[l]] = true;
+      count++;
+      var played = await postPlay(sid, lanes[l], deadline);
+      if (!played) continue;
+      var packed = await probeWrapper(String(played.stream_url || ''), embed, deadline);
       if (packed) return packed;
     }
     return null;
@@ -579,6 +645,39 @@
     return null;
   }
 
+  /* -------------------------------------------------------- moviez fallback */
+  function moviezPageUrl(ref, lang) {
+    var q = '?lang=' + (lang === 'vostfr' ? 'vostfr' : 'vf');
+    if (ref.type === 'tv') {
+      return MOVIEZ + '/serie/' + encodeURIComponent(ref.id) + '/' + (ref.season || 1) + '/' + (ref.episode || 1) + q;
+    }
+    return MOVIEZ + '/' + encodeURIComponent(ref.id) + q;
+  }
+
+  function parseP2(html) {
+    var m = String(html == null ? '' : html).match(/window\.P2\s*=\s*(\{[\s\S]*?\})\s*;/);
+    if (!m) return null;
+    try { return JSON.parse(m[1]); } catch (_) { return null; }
+  }
+
+  async function resolveMoviez(ref, deadline) {
+    var pageUrl = moviezPageUrl(ref, 'vf');
+    var page = await fetchText(pageUrl, merge(HTML_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 9000));
+    if (page.status !== 200 || !page.text) return null;
+    var cfg = parseP2(page.text);
+    if (!cfg || !cfg.t) return null;
+
+    var r = await fetchJson(MOVIEZ + '/api/v2/stream', merge(JSON_HEADERS, {
+      'Content-Type': 'application/json',
+      'Referer': pageUrl,
+      'Origin': MOVIEZ
+    }), left(deadline, 9000), 'POST', JSON.stringify({ t: cfg.t }));
+    if (r.status !== 200 || !r.data || !r.data.hls) return null;
+
+    var lang = String(cfg.lang || 'vf') === 'vostfr' ? 'sub' : 'dub';
+    return packFromPlaylist(String(r.data.hls), deadline, MOVIEZ_STREAM_HEADERS, lang);
+  }
+
   /* -------------------------------------------------------------- streaming */
   async function extractStreamUrl(episodeHref, lang) {
     var deadline = now() + 26000;
@@ -586,8 +685,14 @@
     if (!ref) return streamFail('CineRegal : identifiant invalide.');
     if (ref.type === 'tv' && (!ref.season || !ref.episode)) { ref.season = ref.season || 1; ref.episode = ref.episode || 1; }
 
+    /* Reader #1: the site's HD reader (fluxora). Reader #2: its moviez source. */
     try {
-      var packed = await resolveFluxora(ref, deadline);
+      var packed = await resolveFluxora(ref, now() + 13000);
+      if (packed) return packed;
+    } catch (_) { /* fall through */ }
+
+    try {
+      packed = await resolveMoviez(ref, deadline);
       if (packed) return packed;
     } catch (_) { /* reported below */ }
 

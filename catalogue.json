@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 6,
-  "bundleFile": "bundles/Ney-Source-Bundle-6.zip",
+  "bundleVersion": 7,
+  "bundleFile": "bundles/Ney-Source-Bundle-7.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -48,18 +48,20 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.1.zip",
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.2.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone (VF)",
         "recommended": false,
         "language": "Francais (VF)",
         "languages": [
-          "dub"
+          "dub",
+          "sub"
         ],
         "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
       },
       "changelog": [
+        "1.0.0-beta.2: Playback now starts on the titles the HD reader does not index. The resolver reads the reader session id from its own script, tries every announced source in availability order (including the one it first flags unverified), waits out the warming answer instead of mistaking it for a failure, follows the HLS proxy player used by recent releases, and stops rejecting playable playlists because of a host-name check. When the HD reader has no usable lane, the moviez source of the same catalogue takes over in VF (VOSTFR when VF is missing). Popular titles that used to end on \"le lecteur HD n a pas fourni de flux lisible\" now play.",
         "1.0.0-beta.1: New CineRegal module (cineregal.onl): French TMDB catalogue with multi search, details, seasons/episodes and discovery (trending, popular, top rated). Playback goes through the site's public HD reader (fluxora.sbs): the signed HLS gateway is resolved from the embed page, validated, and every available rendition is exposed highest first. Titles without an available source fail with an explicit message."
       ]
     }
@@ -141,6 +143,13 @@
       "version": "1.0.0-beta.8",
       "sha256": "3aedffe5772d7094d9f5c0d9a470e09109c4800e72ac07b30105d78aa8fa160c",
       "retiredAtMs": 1793268918829
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.1.zip",
+      "moduleId": "cineregal-v1",
+      "version": "1.0.0-beta.1",
+      "sha256": "b3664cf775082f1b3b24d4e03b5733c47361aa9634295768b734891797c6ab2d",
+      "retiredAtMs": 1793273602676
     }
   ]
 }
