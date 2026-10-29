@@ -3,12 +3,12 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 7,
-  "bundleFile": "bundles/Ney-Source-Bundle-7.zip",
+  "bundleVersion": 8,
+  "bundleFile": "bundles/Ney-Source-Bundle-8.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
-      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.9.zip",
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.10.zip",
       "presentation": {
         "category": "Anime",
         "purpose": "French (VOSTFR / VF) Anime",
@@ -21,6 +21,7 @@
         "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
       },
       "changelog": [
+        "1.0.0-beta.10: Home hero cards use the wide Kitsu cover artwork again (the original header look), while grid cards and detail pages keep the full portrait poster. Titles, search and players are unchanged.",
         "1.0.0-beta.9: Hero cards and detail pages go back to the original portrait poster artwork. The 2.7-4.2:1 Kitsu cover had been used as the main image, so the app crop-filled it into a narrow slice and the header looked massively zoomed; the wide cover is now only exposed as banner/backdrop. This also stops the detail page from showing a cropped banner instead of the whole poster.",
         "1.0.0-beta.8: Search now answers in about 1-2 s (streaming worker pool that starts on the first source, a 2.6 s verification budget, negative caching of franime misses and a 3-minute query cache). Titles are always English or French, never romaji or Japanese (Blue Box stays Blue Box, The Apothecary Diaries keeps its French subtitle). Home rows use the 550x780 Kitsu posters. vidmoly is the default player when available, then sibnet, and every verified player is listed in the Quality picker.",
         "1.0.0-beta.7: Hero cards now use the 1981-2048 px Kitsu banner artwork instead of the small portrait poster, and text search is rebuilt around French titles (AniList search mapped to Kitsu, in parallel with Kitsu text search, 8.5 s deadline, bounded verification, Kitsu-card fallback): a French query now answers in about 2 s instead of failing after a delay.",
@@ -48,7 +49,7 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.2.zip",
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.3.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone (VF)",
@@ -61,6 +62,7 @@
         "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
       },
       "changelog": [
+        "1.0.0-beta.3: Player and quality in one picker. Vidzy (the site's first player) is now the default reader: its page, embed, HLS key and playlist are resolved first, and it is only offered when its media playlist and first segment answer as real media. The HD reader and the moviez source are resolved in parallel and their renditions appear in the same Quality list (for example \"Moviez VOSTFR · 1080p\"), so the viewer switches player and quality from one menu.",
         "1.0.0-beta.2: Playback now starts on the titles the HD reader does not index. The resolver reads the reader session id from its own script, tries every announced source in availability order (including the one it first flags unverified), waits out the warming answer instead of mistaking it for a failure, follows the HLS proxy player used by recent releases, and stops rejecting playable playlists because of a host-name check. When the HD reader has no usable lane, the moviez source of the same catalogue takes over in VF (VOSTFR when VF is missing). Popular titles that used to end on \"le lecteur HD n a pas fourni de flux lisible\" now play.",
         "1.0.0-beta.1: New CineRegal module (cineregal.onl): French TMDB catalogue with multi search, details, seasons/episodes and discovery (trending, popular, top rated). Playback goes through the site's public HD reader (fluxora.sbs): the signed HLS gateway is resolved from the embed page, validated, and every available rendition is exposed highest first. Titles without an available source fail with an explicit message."
       ]
@@ -150,6 +152,20 @@
       "version": "1.0.0-beta.1",
       "sha256": "b3664cf775082f1b3b24d4e03b5733c47361aa9634295768b734891797c6ab2d",
       "retiredAtMs": 1793273602676
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.2.zip",
+      "moduleId": "cineregal-v1",
+      "version": "1.0.0-beta.2",
+      "sha256": "7c226046eda69447869351c0e9acf364707ea3b15792a772404bdfecc837a86a",
+      "retiredAtMs": 1793277718078
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.9.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.9",
+      "sha256": "48340f896fa2dba2e25587233898e7571a9346c77c8b5f2c0386f1d56ea705b1",
+      "retiredAtMs": 1793277718078
     }
   ]
 }

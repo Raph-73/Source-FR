@@ -380,14 +380,13 @@
     if (banner) card.banner = banner;
     return card;
   }
-  /* Hero cards are poster-shaped in the app: the 2.7-4.2:1 Kitsu cover, used
-   * as their main image, is crop-filled down to a narrow slice and reads as a
-   * massive zoom. The portrait poster keeps the whole artwork. The wide cover
-   * stays on the card as `banner`/`backdrop` for layouts that want one. */
+  /* Hero slots show the wide Kitsu cover (1981-2048 px), the artwork the home
+   * header was built around. Grid cards and detail pages keep the portrait
+   * poster, which is the only artwork that fits their poster-shaped frames. */
   function heroCardOf(a) {
     var card = cardOf(a);
     var banner = bannerOf(a);
-    if (banner) card.backdrop = banner;
+    if (banner) { card.image = banner; card.backdrop = banner; }
     return card;
   }
 

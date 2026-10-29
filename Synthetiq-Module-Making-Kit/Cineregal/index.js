@@ -18,10 +18,12 @@
   var UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
   var MOVIEZ = 'https://api.moviez.ac';
+  var VIDZY = 'https://vidzy.org';
   var JSON_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var HTML_HEADERS = { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var STREAM_HEADERS = { 'User-Agent': UA, 'Referer': FLUX + '/' };
   var MOVIEZ_STREAM_HEADERS = { 'User-Agent': UA, 'Referer': MOVIEZ + '/' };
+  var VIDZY_STREAM_HEADERS = { 'User-Agent': UA, 'Referer': VIDZY + '/', 'Origin': 'https://vidzy.cc' };
 
   var FEEDS = {
     trending: { path: '/trending/all/week', kind: 'mixed' },
@@ -459,6 +461,170 @@
     return { streams: [], subtitles: [], lang: 'dub', error: { message: message } };
   }
 
+  /* ------------------------------------------------------ reader composition */
+  /* Every reader is exposed in the app's Quality picker, so the viewer picks a
+   * player and a rendition in the same list. The first reader is the default. */
+  function readerLabel(reader) {
+    return reader.player + (reader.lang === 'sub' ? ' VOSTFR' : '');
+  }
+
+  function composeReaders(readers) {
+    var order = readers.filter(function (r) { return !!(r && r.packed && r.packed.url); });
+    if (!order.length) return null;
+
+    var entries = [], streams = [], labels = {};
+    function add(list, reader, limit) {
+      var prefix = readerLabel(reader);
+      for (var i = 0; i < list.length && i < limit; i++) {
+        var q = list[i];
+        if (!q || !q.url) continue;
+        var label = prefix + ' \u00b7 ' + q.label;
+        if (labels[label]) continue;
+        labels[label] = true;
+        entries.push({ label: label, height: q.height, url: q.url, headers: q.headers || reader.packed.headers });
+        streams.push(label, q.url);
+      }
+    }
+
+    add(order[0].packed.qualities || [], order[0], 4);
+    for (var r = 1; r < order.length; r++) add(order[r].packed.qualities || [], order[r], 2);
+    if (!entries.length) return null;
+
+    var primary = order[0];
+    var top = entries[0];
+    return {
+      url: top.url,
+      headers: top.headers,
+      streamType: 'hls',
+      quality: top.label,
+      defaultQuality: top.label,
+      streams: streams,
+      qualities: entries,
+      subtitles: [],
+      lang: primary.lang,
+      provider: primary.player,
+      servers: order.map(function (r) {
+        return {
+          name: r.player,
+          label: readerLabel(r),
+          url: r.packed.url,
+          headers: r.packed.headers,
+          streamType: 'hls',
+          lang: r.lang,
+          qualities: r.packed.qualities || []
+        };
+      })
+    };
+  }
+
+  /* ------------------------------------------------------------- vidzy reader */
+  /* Vidzy is the site's first player. Its CDN signs every HLS request with a
+   * short-lived key from its own public gate; the playlist is only accepted
+   * after the media rendition and its first segment answer as real media. */
+  function vidzyPageUrl(ref) {
+    if (ref.type === 'tv') {
+      return VIDZY + '/serie/' + encodeURIComponent(ref.id) + '/' + (ref.season || 1) + '/' + (ref.episode || 1) + '/vf';
+    }
+    return VIDZY + '/movie/' + encodeURIComponent(ref.id) + '/vf';
+  }
+
+  function vidzyEmbedOf(html) {
+    var m = String(html == null ? '' : html).match(/(?:src|data-src)="(https:\/\/vidzy\.(?:cc|org|live)\/embed-[^"]+?\.html)"/i);
+    return m ? m[1] : '';
+  }
+
+  function vidzySourceOf(html) {
+    var m = String(html == null ? '' : html).match(/sources:\s*\[\{\s*src:\s*"([^"]+)"/i);
+    if (!m) return '';
+    var host = String(m[1]).match(/^https:\/\/([^\/?#]+)/i);
+    if (!host || !/(^|\.)vidzy\.(?:cc|org|live)$/i.test(host[1])) return '';
+    return m[1];
+  }
+
+  function withGk(url, gk) {
+    if (!gk || String(url).indexOf('gk=') !== -1) return String(url);
+    return String(url) + (String(url).indexOf('?') === -1 ? '?' : '&') + 'gk=' + encodeURIComponent(gk);
+  }
+
+  async function vidzyGate(embedHtml, embedUrl, deadline) {
+    var m = String(embedHtml == null ? '' : embedHtml).match(/(https:\/\/[a-z0-9.-]+\/gate\.php)/i);
+    var gate = m ? m[1] : 'https://v6.vidzy.cc/gate.php';
+    var qs = '?cw=88.01&cw2=84.01&wg=1&dpr=2&sw=390&hw=8&ft=TOP&rf=vidzy.org';
+    var r = await fetchJson(gate + qs, merge(JSON_HEADERS, {
+      'Accept': '*/*', 'Referer': embedUrl, 'Origin': 'https://vidzy.cc'
+    }), left(deadline, 6000));
+    return r.data && r.data.gk ? String(r.data.gk) : '';
+  }
+
+  function firstSegmentOf(text, baseUrl) {
+    var lines = String(text == null ? '' : text).split(/\r?\n/), expect = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/^\s+|\s+$/g, '');
+      if (!line) continue;
+      if (/^#EXTINF:/i.test(line)) { expect = true; continue; }
+      if (line.charAt(0) === '#') continue;
+      if (expect) return resolveUrl(baseUrl, line);
+    }
+    return '';
+  }
+
+  async function segmentIsMedia(mediaUrl, text, headers, deadline) {
+    var seg = firstSegmentOf(text, mediaUrl);
+    if (!seg) return false;
+    try {
+      var r = await fetchText(seg, headers, left(deadline, 5000));
+      var type = String((r.headers && (r.headers['content-type'] || r.headers['Content-Type'])) || '');
+      if (r.status !== 200 && r.status !== 206) return false;
+      return !/mpegurl|text\/html/i.test(type);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function resolveVidzy(ref, deadline) {
+    var pageUrl = vidzyPageUrl(ref);
+    var page = await fetchText(pageUrl, merge(HTML_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 7000));
+    if (page.status !== 200 || !page.text) return null;
+    var embedUrl = vidzyEmbedOf(page.text);
+    if (!embedUrl) return null;
+
+    var emb = await fetchText(embedUrl, merge(HTML_HEADERS, { 'Referer': VIDZY + '/' }), left(deadline, 7000));
+    if (emb.status !== 200 || !emb.text) return null;
+    var src = vidzySourceOf(emb.text);
+    if (!src) return null;
+
+    var gk = await vidzyGate(emb.text, embedUrl, deadline);
+    var headers = merge(VIDZY_STREAM_HEADERS, { 'Referer': embedUrl });
+    var masterUrl = withGk(src, gk);
+
+    var master = await fetchText(masterUrl, merge(headers, { 'Accept': 'application/vnd.apple.mpegurl,*/*' }), left(deadline, 7000));
+    var text = normalizePlaylist(master.text);
+    if (master.status !== 200 || text.indexOf('#EXTM3U') !== 0) return null;
+    if (/#EXT-X-KEY\s*:[^\n]*METHOD\s*=\s*(?!NONE)/i.test(text)) return null;
+
+    var variants = parseMaster(text, masterUrl);
+    var valid = [];
+    for (var i = 0; i < variants.length; i++) {
+      var vurl = withGk(variants[i].url, gk);
+      var vr = await fetchText(vurl, merge(headers, { 'Accept': 'application/vnd.apple.mpegurl,*/*' }), left(deadline, 6000));
+      if (vr.status !== 200 || !isMediaPlaylist(vr.text)) continue;
+      if (!(await segmentIsMedia(vurl, vr.text, headers, deadline))) continue;
+      valid.push({ url: vurl, height: variants[i].height, bandwidth: variants[i].bandwidth });
+    }
+
+    if (valid.length) {
+      var packed = packHls(valid, withGk(masterUrl, gk), { headers: headers, lang: 'dub' });
+      if (packed) return { player: 'Vidzy', lang: 'dub', packed: packed };
+      return null;
+    }
+
+    if (isMediaPlaylist(text) && (await segmentIsMedia(masterUrl, text, headers, deadline))) {
+      var single = packHls([{ url: masterUrl, height: 0, bandwidth: 0 }], null, { headers: headers, lang: 'dub' });
+      if (single) return { player: 'Vidzy', lang: 'dub', packed: single };
+    }
+    return null;
+  }
+
   /* ------------------------------------------------------- fluxora HD reader */
   function parseInitialPlay(html) {
     var m = String(html == null ? '' : html).match(/INITIAL_PLAY\s*=\s*(\{[\s\S]*?\}|null)\s*;/);
@@ -680,22 +846,26 @@
 
   /* -------------------------------------------------------------- streaming */
   async function extractStreamUrl(episodeHref, lang) {
-    var deadline = now() + 26000;
     var ref = parseRef(episodeHref);
     if (!ref) return streamFail('CineRegal : identifiant invalide.');
     if (ref.type === 'tv' && (!ref.season || !ref.episode)) { ref.season = ref.season || 1; ref.episode = ref.episode || 1; }
 
-    /* Reader #1: the site's HD reader (fluxora). Reader #2: its moviez source. */
-    try {
-      var packed = await resolveFluxora(ref, now() + 13000);
-      if (packed) return packed;
-    } catch (_) { /* fall through */ }
+    /* Readers run concurrently, each with its own budget; Vidzy is the site's
+     * default player and stays first in the picker when it answers. */
+    var settled = await Promise.all([
+      resolveVidzy(ref, now() + 11000).catch(function () { return null; }),
+      resolveFluxora(ref, now() + 13000).catch(function () { return null; }),
+      resolveMoviez(ref, now() + 14000).catch(function () { return null; })
+    ]);
+    var vidzy = settled[0], fluxora = settled[1], moviez = settled[2];
 
-    try {
-      packed = await resolveMoviez(ref, deadline);
-      if (packed) return packed;
-    } catch (_) { /* reported below */ }
+    var readers = [];
+    if (vidzy) readers.push(vidzy);
+    if (fluxora) readers.push({ player: 'HD', lang: fluxora.lang || 'dub', packed: fluxora });
+    if (moviez) readers.push({ player: 'Moviez', lang: moviez.lang || 'dub', packed: moviez });
 
+    var composed = composeReaders(readers);
+    if (composed) return composed;
     return streamFail('CineRegal : le lecteur HD n\'a pas fourni de flux lisible pour ce titre. Reessayez plus tard ou choisissez un autre titre.');
   }
 
