@@ -3,12 +3,12 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 4,
-  "bundleFile": "bundles/Ney-Source-Bundle-4.zip",
+  "bundleVersion": 5,
+  "bundleFile": "bundles/Ney-Source-Bundle-5.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
-      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.7.zip",
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.8.zip",
       "presentation": {
         "category": "Anime",
         "purpose": "French (VOSTFR / VF) Anime",
@@ -21,10 +21,10 @@
         "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
       },
       "changelog": [
+        "1.0.0-beta.8: Search now answers in about 1-2 s (streaming worker pool that starts on the first source, a 2.6 s verification budget, negative caching of franime misses and a 3-minute query cache). Titles are always English or French, never romaji or Japanese (Blue Box stays Blue Box, The Apothecary Diaries keeps its French subtitle). Home rows use the 550x780 Kitsu posters and detail pages use the wide cover artwork so the image is no longer cropped. vidmoly is the default player when available, then sibnet, and every verified player is listed in the Quality picker.",
         "1.0.0-beta.7: Hero cards now use the 1981-2048 px Kitsu banner artwork instead of the small portrait poster, and text search is rebuilt around French titles (AniList search mapped to Kitsu, in parallel with Kitsu text search, 8.5 s deadline, bounded verification, Kitsu-card fallback): a French query now answers in about 2 s instead of failing after a delay.",
         "1.0.0-beta.6: High-resolution posters (original Kitsu artwork instead of the 284x402 thumbnails), a square 512x512 header icon, and search reworked to finish inside the app budget (9 s deadline, 4-way franime verification, Kitsu-card fallback when franime is rate-limited) so it no longer fails after a delay.",
-        "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
-        "1.0.0-beta.4: Previous Franime package (French anime catalogue with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution)."
+        "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities."
       ]
     },
     {
@@ -126,6 +126,13 @@
       "version": "1.0.0-beta.4",
       "sha256": "cc2d0f29ee0be5f5870c936d62b8234a5c83d2a53cf6e17e78c568850f8cf4f0",
       "retiredAtMs": 1793213890865
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.7.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.7",
+      "sha256": "5c25aa117e3be58af965c52923f3bf1965e414bdc554e47251581096ff133164",
+      "retiredAtMs": 1793267507988
     }
   ]
 }

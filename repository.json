@@ -3,13 +3,13 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1793213890865,
+  "publishedAtMs": 1793267507988,
   "bundle": {
-    "version": 4,
+    "version": 5,
     "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-4.zip",
-    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-4.zip",
-    "sha256": "8e21fbecf485cb8e4b7195edcbbdf25ce830f99696ba2850f1bf22dedb66b488",
+    "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/bundles/Ney-Source-Bundle-5.zip",
+    "packagePath": "/ney73/Ney-source/main/bundles/Ney-Source-Bundle-5.zip",
+    "sha256": "8242e4713548bb14e0ac9792de8cbae87478552770fa39bf411a51963335cb15",
     "signature": ""
   },
   "modules": [
@@ -19,17 +19,17 @@
       "moduleIdentity": "SP-VID-9001-FRANIME",
       "moduleIdentityNumber": 9001,
       "contentType": "video",
-      "version": "1.0.0-beta.7",
+      "version": "1.0.0-beta.8",
       "minAppVersion": "8.0.0",
-      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.7.zip",
-      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.7.zip",
-      "sha256": "5c25aa117e3be58af965c52923f3bf1965e414bdc554e47251581096ff133164",
-      "publishedAtMs": 1793213890865,
+      "packageUrl": "https://raw.githubusercontent.com/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.8.zip",
+      "packagePath": "/ney73/Ney-source/main/Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.8.zip",
+      "sha256": "3aedffe5772d7094d9f5c0d9a470e09109c4800e72ac07b30105d78aa8fa160c",
+      "publishedAtMs": 1793267507988,
       "changelog": [
+        "1.0.0-beta.8: Search now answers in about 1-2 s (streaming worker pool that starts on the first source, a 2.6 s verification budget, negative caching of franime misses and a 3-minute query cache). Titles are always English or French, never romaji or Japanese (Blue Box stays Blue Box, The Apothecary Diaries keeps its French subtitle). Home rows use the 550x780 Kitsu posters and detail pages use the wide cover artwork so the image is no longer cropped. vidmoly is the default player when available, then sibnet, and every verified player is listed in the Quality picker.",
         "1.0.0-beta.7: Hero cards now use the 1981-2048 px Kitsu banner artwork instead of the small portrait poster, and text search is rebuilt around French titles (AniList search mapped to Kitsu, in parallel with Kitsu text search, 8.5 s deadline, bounded verification, Kitsu-card fallback): a French query now answers in about 2 s instead of failing after a delay.",
         "1.0.0-beta.6: High-resolution posters (original Kitsu artwork instead of the 284x402 thumbnails), a square 512x512 header icon, and search reworked to finish inside the app budget (9 s deadline, 4-way franime verification, Kitsu-card fallback when franime is rate-limited) so it no longer fails after a delay.",
-        "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities.",
-        "1.0.0-beta.4: Previous Franime package (French anime catalogue with VOSTFR/VF episodes, Kitsu-assisted text search, enriched episode titles and multi-host stream resolution)."
+        "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities."
       ],
       "presentation": {
         "category": "Anime",

@@ -3,8 +3,8 @@
   "name": "Franime",
   "contentType": "video",
   "contractVersion": 4,
-  "moduleVersion": "1.0.0-beta.7",
-  "description": "French anime catalogue (franime.fr API) with VOSTFR (vo/sub) and VF (dub) episodes resolved via sibnet, vidmoly, uqload, dailymotion, vk and sendvid embeds, with HLS quality ladders and enriched episode titles. Hero banners use the 1981-2048 px Kitsu cover artwork; grids keep the original posters. Search matches French titles through AniList synonyms mapped back to Kitsu ids, runs the plain Kitsu search in parallel for English/romaji, and verifies each hit against franime with a Kitsu-card fallback so search stays inside the app budget.",
+  "moduleVersion": "1.0.0-beta.8",
+  "description": "French anime catalogue (franime.fr API) with VOSTFR (vo/sub) and VF (dub) episodes resolved via sibnet, vidmoly, uqload, dailymotion, vk and sendvid embeds, with HLS quality ladders and enriched episode titles. vidmoly is the default player when available, then sibnet, and every resolved player is exposed in the Quality picker. Titles are always English or French (never romaji or Japanese). Home rows use 550x780 Kitsu posters and detail pages use the wide cover artwork; search verifies hits through a worker pool with negative caching so it answers inside the app budget.",
   "moduleFamilyId": "franime_v1",
   "moduleIdentity": "SP-VID-9001-FRANIME",
   "moduleIdentityNumber": 9001,
@@ -40,7 +40,7 @@
       "homeMaxResults": 40,
       "maxResponseBytes": 2097152,
       "timeoutMs": 30000,
-      "maxConcurrentRequests": 4
+      "maxConcurrentRequests": 8
     },
     "baseUrl": "https://franime.fr",
     "streamHeaders": {

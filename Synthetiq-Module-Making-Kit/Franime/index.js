@@ -69,6 +69,8 @@
   var SUPPORTED_EMBEDS = ['sibnet.ru', 'vidmoly', 'sendvid', 'uqload', 'dailymotion', 'dai.ly', 'vk.com', 'vk.ru'];
 
   var detailsCache = {};
+  var missingCache = {};
+  var queryCache = {};
 
   function now() { return Date.now(); }
   function timeLeft(deadline, cap) {
@@ -314,9 +316,7 @@
     if (!id) return null;
     var p = at.posterImage || {};
     var img = String(p.large || p.original || p.medium || p.small || '').trim();
-    var title = clean((at.titles && at.titles.fr) ||
-      at.canonicalTitle ||
-      (at.titles && (at.titles.en || at.titles.en_jp || at.titles.ja_jp)) || '');
+    var title = pickTitle(at.titles, at.canonicalTitle);
     if (!title) return null;
     var ym = String(at.startDate || '').match(/(\d{4})/);
     return {
@@ -331,10 +331,26 @@
     for (var i = 0; i < ss.length; i++) n += ((((ss[i] || {}).episodes) || []).length);
     return n;
   }
+  /* Japanese (kana/kanji/hangul) and romaji titles are never displayed: the
+   * card shows the English release title, then the official French one, then
+   * the romaji only if nothing else exists. A romaji title ("Ao no Hako") is
+   * what makes a French grid look wrong next to "Blue Box". */
+  function hasCjk(value) {
+    return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff66-\uff9f]/.test(String(value || ''));
+  }
+  function pickTitle(titles, fallback) {
+    var t = titles || {};
+    var order = ['en', 'en_us', 'fr', 'en_jp'];
+    for (var i = 0; i < order.length; i++) {
+      var v = clean(t[order[i]]);
+      if (v && !hasCjk(v)) return v;
+    }
+    var f = clean(fallback);
+    return f && !hasCjk(f) ? f : '';
+  }
   function titleOf(a) {
     if (!a) return '';
-    var t = a.title || (a.titles && (a.titles.en || a.titles.en_us || a.titles.en_jp)) || a.titleO || '';
-    return clean(t);
+    return pickTitle(a.titles, a.title || a.titleO);
   }
   function imageOf(a) {
     if (!a) return '';
@@ -377,6 +393,16 @@
     var key = String(id);
     var hit = detailsCache[key];
     if (hit && now() - hit.at < 5 * 60 * 1000) return hit.data;
+    /* franime answers 404 for every Kitsu entry it does not carry, and those
+     * misses are the slow ones (0.7-5 s). Remember them so typing/repeating a
+     * query does not pay for the same missing id twice. */
+    var missAt = missingCache[key];
+    if (missAt && now() - missAt < 10 * 60 * 1000) {
+      var gone = new Error('Franime details HTTP 404');
+      gone.status = 404;
+      gone.kind = 'notfound';
+      throw gone;
+    }
     var res = await requestJson(API + '/api/anime-by-id/' + encodeURIComponent(id), mergeHeaders(), timeLeft(deadline, cap || 12000));
     if (res.status === 200 && res.data && (res.data.id != null)) {
       detailsCache[key] = { at: now(), data: res.data };
@@ -387,6 +413,7 @@
     /* 404/410 = this Kitsu entry is genuinely absent from franime.
      * Anything else (403 Cloudflare, 429, 5xx, HTML challenge) is transient. */
     err.kind = (res.status === 404 || res.status === 410) ? 'notfound' : 'blocked';
+    if (err.kind === 'notfound') missingCache[key] = now();
     throw err;
   }
 
@@ -435,12 +462,25 @@
     }
     return false;
   }
+  function lecteurRank(name) {
+    var v = String(name || '').toLowerCase();
+    if (v.indexOf('vidmoly') >= 0) return 0;
+    if (v.indexOf('sibnet') >= 0) return 1;
+    return 2;
+  }
+  function providerLabel(server) {
+    var base = String((server && server.name) || '').split(' ')[0] || 'server';
+    base = base.charAt(0).toUpperCase() + base.slice(1);
+    return base + (server && server.streamType === 'mp4' ? ' (MP4)' : ' (HLS)');
+  }
 
   /* ---------------- search / details / episodes ---------------- */
   async function searchResults(query) {
-    /* The app budget is ~15 s: stop well before it so a slow franime/Cloudflare
-     * response can never surface as an app-level timeout. */
-    var deadline = now() + 8500;
+    /* The app budget is ~15 s. Verification is what costs time (a franime
+     * 404 takes 0.7-5 s), so candidates are consumed by a small worker pool
+     * that starts as soon as the first source answers and stops once ten
+     * titles are confirmed or the verification budget is spent. */
+    var deadline = now() + 9000;
     var term = String(query == null ? '' : query).trim();
     if (!term) {
       try {
@@ -456,71 +496,109 @@
       }
     }
 
+    var cacheKey = term.toLowerCase();
+    var cached = queryCache[cacheKey];
+    if (cached && now() - cached.at < 3 * 60 * 1000) return cached.cards;
+
     /* French and English matching run in parallel. AniList resolves the query
      * (including French synonyms) to MAL ids and Kitsu maps those back to the
      * ids franime indexes; the plain Kitsu text search still covers romaji and
      * English titles without the extra round trip. */
-    var mappedPromise = anilistMalIds(term, deadline)
-      .then(function (ids) { return kitsuHitsFromMal(ids, deadline); })
+    var mappedDeadline = now() + 3800;
+    var mappedPromise = anilistMalIds(term, mappedDeadline)
+      .then(function (ids) { return kitsuHitsFromMal(ids, mappedDeadline); })
       .catch(function () { return []; });
     var kitsuPromise = kitsuSearch(term, deadline).catch(function () { return []; });
 
-    var mapped = await mappedPromise;
-    var direct = await kitsuPromise;
-
-    var hits = [], seenId = {};
-    function collect(list) {
-      for (var n = 0; n < list.length; n++) {
-        var h = list[n], hid = h && h.id != null ? String(h.id) : '';
-        if (!hid || seenId[hid]) continue;
-        seenId[hid] = true;
-        hits.push(h);
-      }
+    var queue = [], queued = {}, seq = 0, open = 2, waiters = [];
+    function wake() {
+      var list = waiters;
+      waiters = [];
+      for (var w = 0; w < list.length; w++) list[w]();
     }
-    collect(mapped);
-    collect(direct);
-    hits = hits.slice(0, 16);
+    function enqueue(hits) {
+      for (var n = 0; n < (hits || []).length; n++) {
+        var h = hits[n], hid = h && h.id != null ? String(h.id) : '';
+        if (!hid || queued[hid]) continue;
+        queued[hid] = true;
+        queue.push({ hit: h, order: seq++ });
+      }
+      wake();
+    }
+    function sourceDone() { open -= 1; wake(); }
+    mappedPromise.then(enqueue).then(sourceDone, sourceDone);
+    kitsuPromise.then(enqueue).then(sourceDone, sourceDone);
 
-    var out = [], seen = {}, fallback = [];
-    /* Verify candidates six at a time, keeping relevance order. franime needs
-     * one request per id, so the batch size is the only lever on latency. */
-    for (var h = 0; h < hits.length && out.length < 10 && now() < deadline - 400; h += 6) {
-      var batch = hits.slice(h, h + 6);
-      var results = await Promise.all(batch.map(async function (hit) {
-        var kid = hit && hit.id != null ? String(hit.id) : '';
-        if (!kid) return null;
+    var budgetEnd = 0;
+    function nextHit() {
+      if (budgetEnd && now() > budgetEnd) return Promise.resolve(null);
+      if (queue.length) return Promise.resolve(queue.shift());
+      if (!open) return Promise.resolve(null);
+      return new Promise(function (resolve) { waiters.push(resolve); }).then(function () {
+        if (budgetEnd && now() > budgetEnd) return null;
+        if (queue.length) return queue.shift();
+        if (!open) return null;
+        return nextHit();
+      });
+    }
+
+    var out = [], outIds = {}, fallback = [], fallbackIds = {};
+    var target = 10;
+    function timeUp() {
+      if (now() > deadline - 500) return true;
+      return out.length >= target || (budgetEnd > 0 && now() > budgetEnd);
+    }
+    async function worker() {
+      while (true) {
+        if (timeUp()) break;
+        var item = await nextHit();
+        if (!item) break;
+        if (!budgetEnd) budgetEnd = now() + 2600;
+        if (timeUp()) break;
+        var kid = String(item.hit && item.hit.id != null ? item.hit.id : '');
+        if (!kid) continue;
+        var res;
         try {
-          return { ok: true, anime: await fetchAnimeById(kid, deadline, 1800) };
+          res = { ok: true, anime: await fetchAnimeById(kid, deadline, 1800) };
         } catch (e) {
-          return { ok: false, transient: !e || e.kind !== 'notfound', hit: hit };
+          res = { ok: false, transient: !e || e.kind !== 'notfound' };
         }
-      }));
-      for (var j = 0; j < results.length; j++) {
-        var r = results[j];
-        if (!r) continue;
-        if (!r.ok) {
-          if (r.transient) {
-            var fc = kitsuCardOf(r.hit);
-            if (fc && !seen['k:' + fc.id]) {
-              seen['k:' + fc.id] = true;
-              fallback.push(fc);
-            }
+        if (!res.ok) {
+          if (!res.transient) continue;
+          var fc = kitsuCardOf(item.hit);
+          if (fc && !fallbackIds[fc.id]) {
+            fallbackIds[fc.id] = true;
+            fallback.push({ order: item.order, card: fc });
           }
           continue;
         }
-        var a = r.anime;
+        var a = res.anime;
         var fid = String(a.id);
-        if (seen['f:' + fid]) continue;
-        seen['f:' + fid] = true;
+        if (outIds[fid]) continue;
+        outIds[fid] = true;
         if (a.nsfw || !titleOf(a) || countEpisodes(a) < 1) continue;
-        out.push(cardOf(a));
-        if (out.length >= 10) break;
+        out.push({ order: item.order, card: cardOf(a) });
       }
     }
+    var workers = [];
+    for (var w = 0; w < 8; w++) workers.push(worker());
+    await Promise.all(workers);
+
+    out.sort(function (x, y) { return x.order - y.order; });
+    var cards = out.slice(0, target).map(function (r) { return r.card; });
     /* franime verification was blocked and nothing could be confirmed: return
      * the Kitsu cards (same ids/source franime indexes) rather than failing. */
-    if (!out.length && fallback.length) return fallback.slice(0, 10);
-    return out;
+    if (!cards.length && fallback.length) {
+      fallback.sort(function (x, y) { return x.order - y.order; });
+      cards = fallback.slice(0, target).map(function (r) { return r.card; });
+    }
+    if (cards.length) {
+      var keys = [];
+      for (var k in queryCache) keys.push(k);
+      if (keys.length >= 12) delete queryCache[keys[0]];
+      queryCache[cacheKey] = { at: now(), cards: cards };
+    }
+    return cards;
   }
 
   async function extractDetails(urlOrId) {
@@ -530,11 +608,19 @@
     var a = await fetchAnimeById(id, deadline);
     var card = cardOf(a);
     var genres = Array.isArray(a.themes) ? a.themes.map(function (g) { return clean(g); }).filter(Boolean) : [];
+    var poster = imageOf(a);
+    var banner = bannerOf(a);
+    var alt = clean(a.titles && a.titles.fr);
+    if (!alt || alt === card.title || hasCjk(alt)) alt = '';
     return {
       id: String(a.id), href: String(a.id), url: SITE + '/anime/' + String(a.id),
-      title: card.title, originalTitle: clean(a.titleO || ''),
+      title: card.title, originalTitle: alt,
       description: clean(a.description || ''), synopsis: clean(a.description || ''),
-      image: card.image, poster: card.image, banner: String(a.banner || ''),
+      /* The detail hero is landscape: the poster (2:3, often 460x651) was
+       * cropped there, so the wide Kitsu cover is the main image and the
+       * portrait poster stays available for grids and thumbnails. */
+      image: banner || poster, poster: poster || banner,
+      banner: banner, backdrop: banner,
       year: yearOf(a), format: String(a.format || ''), status: String(a.status || ''),
       genres: genres, rating: a.note != null ? String(a.note) : '',
       type: 'video'
@@ -824,7 +910,13 @@
       return { streams: [], subtitles: [], lang: wantOut, error: { message: wantApi === 'vf' ? 'Franime: no VF (dub) lecteur for this episode.' : 'Franime: no VO (sub) lecteur for this episode.' } };
     }
     var servers = [], seen = {}, skipped = [], failed = [];
-    for (var i = 0; i < lecteurs.length; i++) {
+    /* Default player preference: vidmoly first, then sibnet, then whatever
+     * else franime lists. The resolver index must stay the original one. */
+    var order = [];
+    for (var o = 0; o < lecteurs.length; o++) order.push(o);
+    order.sort(function (x, y) { return lecteurRank(lecteurs[x]) - lecteurRank(lecteurs[y]) || x - y; });
+    for (var k = 0; k < order.length; k++) {
+      var i = order[k];
       if (now() >= deadline) break;
       var name = String(lecteurs[i] || '');
       if (!name || isSkippedLecteur(name)) { skipped.push(name || ('index ' + i)); continue; }
@@ -879,8 +971,22 @@
       flat.push(servers[f].url);
     }
     var primaryQualities = (primary.qualities && primary.qualities.length)
-      ? primary.qualities
+      ? primary.qualities.slice()
       : [{ label: 'Auto', url: primary.url, headers: primary.headers }];
+    /* Expose the other verified players in the Quality picker: the sibnet MP4
+     * is a full-strength fallback when the default HLS ladder stalls. One
+     * entry per provider name (franime often lists the same host twice). */
+    var extraLabels = {};
+    for (var p = 1; p < servers.length; p++) {
+      var other = servers[p];
+      if (!other || !other.url) continue;
+      var label = providerLabel(other);
+      if (extraLabels[label]) continue;
+      extraLabels[label] = true;
+      var entry = { label: label, url: other.url, headers: other.headers };
+      if (other.streamType) entry.streamType = other.streamType;
+      primaryQualities.push(entry);
+    }
     return {
       url: primary.url, headers: primary.headers, streamType: primary.streamType, lang: wantOut,
       streams: flat,
@@ -907,13 +1013,48 @@
     if (res.status !== 200 || !res.data || !Array.isArray(res.data.data)) throw new Error('Franime calendar HTTP ' + res.status);
     return res.data.data;
   }
-  function calendarCard(c) {
+  /* The calendar only ships 284x402 thumbs and romaji calendar titles. One
+   * Kitsu round trip per 20 ids upgrades both: the 550x780 "large" poster and
+   * the English/French title used everywhere else in the module. */
+  async function kitsuMeta(ids, deadline) {
+    var out = {}, chunks = [];
+    for (var start = 0; start < ids.length; start += 20) chunks.push(ids.slice(start, start + 20));
+    await Promise.all(chunks.map(async function (chunk) {
+      if (!chunk.length || now() >= deadline - 600) return;
+      var url = KITSU + '/anime?filter[id]=' + chunk.join(',') +
+        '&fields[anime]=titles,posterImage&page[limit]=20';
+      try {
+        var res = await requestJson(url, kitsuHeaders(), timeLeft(deadline, 5000));
+        if (res.status !== 200 || !res.data || !Array.isArray(res.data.data)) return;
+        for (var i = 0; i < res.data.data.length; i++) {
+          var row = res.data.data[i], at = (row && row.attributes) || {}, p = at.posterImage || {};
+          out[String(row.id)] = {
+            title: pickTitle(at.titles, ''),
+            image: String(p.large || p.original || p.medium || '').trim()
+          };
+        }
+      } catch (_) { /* keep the calendar art */ }
+    }));
+    return out;
+  }
+  function calendarCard(c, meta) {
     var id = String(c.id_anime);
-    var img = String(c.affiche || '');
+    var m = (meta && meta[id]) || {};
+    var img = m.image || String(c.affiche || '').replace(/\/small\.jpg$/i, '/large.jpg');
     return {
-      id: id, href: id, title: clean(c.title_anime), image: img, poster: img,
+      id: id, href: id, title: m.title || clean(c.title_anime), image: img, poster: img,
       type: 'video', description: clean((c.jour ? ('Sortie : ' + c.jour) : '') + (c.saison ? (' - Saison ' + c.saison) : ''))
     };
+  }
+  function calendarRows(cal, limit, skip) {
+    var rows = [], seen = skip || {};
+    for (var i = 0; i < cal.length && rows.length < limit; i++) {
+      var id = String(cal[i].id_anime);
+      if (!id || seen[id] || !cal[i].title_anime) continue;
+      seen[id] = true;
+      rows.push(cal[i]);
+    }
+    return rows;
   }
   function toCard(a) { return cardOf(a); }
   async function discoveryHome() {
@@ -942,13 +1083,12 @@
     } catch (_) { /* calendar-only fallback */ }
     try {
       var cal = await fetchCalendar(deadline);
-      var cards = [], localSeen = {};
-      for (var j = 0; j < cal.length && cards.length < 30; j++) {
-        var id = String(cal[j].id_anime);
-        if (!id || localSeen[id] || !cal[j].title_anime) continue;
-        localSeen[id] = true;
-        cards.push(calendarCard(cal[j]));
-      }
+      var rows = calendarRows(cal, 30);
+      var ids = [];
+      for (var r = 0; r < rows.length; r++) ids.push(String(rows[r].id_anime));
+      var meta = await kitsuMeta(ids, deadline);
+      var cards = [];
+      for (var c = 0; c < rows.length; c++) cards.push(calendarCard(rows[c], meta));
       cards = dedupe(cards);
       if (cards.length) sections.push({ id: 'calendrier', title: 'Calendrier des sorties', style: 'poster', items: cards, viewAll: { mode: 'feed', feedId: 'calendrier' } });
     } catch (_) { /* top-only fallback */ }
@@ -971,13 +1111,12 @@
     if (feed === 'calendrier') {
       if (pageNum > 1) return { items: [], page: pageNum, hasMore: false };
       var cal = await fetchCalendar(deadline);
-      var seen = {}, cards = [];
-      for (var j = 0; j < cal.length && cards.length < 50; j++) {
-        var id = String(cal[j].id_anime);
-        if (!id || seen[id] || !cal[j].title_anime) continue;
-        seen[id] = true;
-        cards.push(calendarCard(cal[j]));
-      }
+      var rows = calendarRows(cal, 50);
+      var ids = [];
+      for (var r = 0; r < rows.length; r++) ids.push(String(rows[r].id_anime));
+      var meta = await kitsuMeta(ids, deadline);
+      var cards = [];
+      for (var c = 0; c < rows.length; c++) cards.push(calendarCard(rows[c], meta));
       return { items: cards, page: 1, hasMore: false };
     }
     /* Full-catalogue browsing is intentionally unavailable: the catalogue
