@@ -3,12 +3,12 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 5,
-  "bundleFile": "bundles/Ney-Source-Bundle-5.zip",
+  "bundleVersion": 6,
+  "bundleFile": "bundles/Ney-Source-Bundle-6.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
-      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.8.zip",
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.9.zip",
       "presentation": {
         "category": "Anime",
         "purpose": "French (VOSTFR / VF) Anime",
@@ -21,7 +21,8 @@
         "iconUrl": "https://franime.fr/logos/android-chrome-512x512.png"
       },
       "changelog": [
-        "1.0.0-beta.8: Search now answers in about 1-2 s (streaming worker pool that starts on the first source, a 2.6 s verification budget, negative caching of franime misses and a 3-minute query cache). Titles are always English or French, never romaji or Japanese (Blue Box stays Blue Box, The Apothecary Diaries keeps its French subtitle). Home rows use the 550x780 Kitsu posters and detail pages use the wide cover artwork so the image is no longer cropped. vidmoly is the default player when available, then sibnet, and every verified player is listed in the Quality picker.",
+        "1.0.0-beta.9: Hero cards and detail pages go back to the original portrait poster artwork. The 2.7-4.2:1 Kitsu cover had been used as the main image, so the app crop-filled it into a narrow slice and the header looked massively zoomed; the wide cover is now only exposed as banner/backdrop. This also stops the detail page from showing a cropped banner instead of the whole poster.",
+        "1.0.0-beta.8: Search now answers in about 1-2 s (streaming worker pool that starts on the first source, a 2.6 s verification budget, negative caching of franime misses and a 3-minute query cache). Titles are always English or French, never romaji or Japanese (Blue Box stays Blue Box, The Apothecary Diaries keeps its French subtitle). Home rows use the 550x780 Kitsu posters. vidmoly is the default player when available, then sibnet, and every verified player is listed in the Quality picker.",
         "1.0.0-beta.7: Hero cards now use the 1981-2048 px Kitsu banner artwork instead of the small portrait poster, and text search is rebuilt around French titles (AniList search mapped to Kitsu, in parallel with Kitsu text search, 8.5 s deadline, bounded verification, Kitsu-card fallback): a French query now answers in about 2 s instead of failing after a delay.",
         "1.0.0-beta.6: High-resolution posters (original Kitsu artwork instead of the 284x402 thumbnails), a square 512x512 header icon, and search reworked to finish inside the app budget (9 s deadline, 4-way franime verification, Kitsu-card fallback when franime is rate-limited) so it no longer fails after a delay.",
         "1.0.0-beta.5: Private repository identity SP-VID-9001-FRANIME allocated. No playback code change; the package was rebuilt so the repository index has unique module identities."
@@ -133,6 +134,13 @@
       "version": "1.0.0-beta.7",
       "sha256": "5c25aa117e3be58af965c52923f3bf1965e414bdc554e47251581096ff133164",
       "retiredAtMs": 1793267507988
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Franime/dist/Franime-1.0.0-beta.8.zip",
+      "moduleId": "franime-v1",
+      "version": "1.0.0-beta.8",
+      "sha256": "3aedffe5772d7094d9f5c0d9a470e09109c4800e72ac07b30105d78aa8fa160c",
+      "retiredAtMs": 1793268918829
     }
   ]
 }

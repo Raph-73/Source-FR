@@ -380,12 +380,14 @@
     if (banner) card.banner = banner;
     return card;
   }
-  /* Hero slots are full-bleed and landscape: the 460x651 poster is far too
-   * small there, while the Kitsu cover image is 1981-2048 px wide. */
+  /* Hero cards are poster-shaped in the app: the 2.7-4.2:1 Kitsu cover, used
+   * as their main image, is crop-filled down to a narrow slice and reads as a
+   * massive zoom. The portrait poster keeps the whole artwork. The wide cover
+   * stays on the card as `banner`/`backdrop` for layouts that want one. */
   function heroCardOf(a) {
     var card = cardOf(a);
     var banner = bannerOf(a);
-    if (banner) { card.image = banner; card.backdrop = banner; }
+    if (banner) card.backdrop = banner;
     return card;
   }
 
@@ -616,10 +618,10 @@
       id: String(a.id), href: String(a.id), url: SITE + '/anime/' + String(a.id),
       title: card.title, originalTitle: alt,
       description: clean(a.description || ''), synopsis: clean(a.description || ''),
-      /* The detail hero is landscape: the poster (2:3, often 460x651) was
-       * cropped there, so the wide Kitsu cover is the main image and the
-       * portrait poster stays available for grids and thumbnails. */
-      image: banner || poster, poster: poster || banner,
+      /* The detail artwork frame is poster-shaped like the home hero: the
+       * portrait original is the only artwork shown whole. The wide Kitsu
+       * cover stays exposed as banner/backdrop for layouts that use one. */
+      image: poster || banner, poster: poster || banner,
       banner: banner, backdrop: banner,
       year: yearOf(a), format: String(a.format || ''), status: String(a.status || ''),
       genres: genres, rating: a.note != null ? String(a.note) : '',
