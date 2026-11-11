@@ -4,9 +4,10 @@
  * Catalogue + metadata: the site's own TMDB proxy (/api/tmdb) in fr-FR.
  * Playback: Vidzy (vidzy.org), the site's first player, is resolved from the
  * embed's signed HLS master and returns first. That master is fingerprint-
- * filtered at the CDN (browsers get it, server HTTP stacks get a decoy), so
- * the module never rejects it on a probe; HD (fluxora.sbs) and moviez stay as
- * labelled fallbacks. Every picker entry carries its player name.
+ * filtered at the CDN: Chrome/Edge fingerprints without br+zstd get a decoy
+ * and player UAs are blocked, so Vidzy requests use a Firefox UA. HD
+ * (fluxora.sbs) and moviez stay as labelled fallbacks. Every picker entry
+ * carries its player name.
  * ==========================================================================*/
 
 (function () {
@@ -20,11 +21,16 @@
 
   var MOVIEZ = 'https://api.moviez.ac';
   var VIDZY = 'https://vidzy.org';
+  /* Vidzy's CDN decoys Chrome/Edge fingerprints whose Accept-Encoding does not
+   * advertise br+zstd, and hard-blocks player UAs (ExoPlayer, VLC, ffmpeg...).
+   * A Firefox UA is served the real master for every Accept-Encoding value,
+   * including the identity one media players usually force. */
+  var VIDZY_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0';
   var JSON_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var HTML_HEADERS = { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var STREAM_HEADERS = { 'User-Agent': UA, 'Referer': FLUX + '/' };
   var MOVIEZ_STREAM_HEADERS = { 'User-Agent': UA, 'Referer': MOVIEZ + '/' };
-  var VIDZY_STREAM_HEADERS = { 'User-Agent': UA, 'Referer': VIDZY + '/', 'Origin': 'https://vidzy.cc' };
+  var VIDZY_STREAM_HEADERS = { 'User-Agent': VIDZY_UA, 'Accept': '*/*', 'Accept-Encoding': 'identity', 'Referer': VIDZY + '/', 'Origin': 'https://vidzy.cc' };
 
   var FEEDS = {
     trending: { path: '/trending/all/week', kind: 'mixed' },
@@ -521,12 +527,11 @@
 
   /* ------------------------------------------------------------- vidzy reader */
   /* Vidzy is the site's own first player. Its page embeds a videojs player
-   * whose `sources` entry is a signed HLS master. The CDN filters that master
-   * by client fingerprint: browsers get the real playlist, server-side HTTP
-   * stacks get a 177-byte decoy that loops on index.m3u8. The module never
-   * rejects Vidzy because of that probe -- when the probe happens to return
-   * the real master the ladder is exposed, otherwise the signed master is
-   * handed to the app's player, which runs on the device network stack. */
+   * whose `sources` entry is a signed HLS master. The CDN answers a 176-byte
+   * self-looping decoy to Chrome/Edge fingerprints whose Accept-Encoding lacks
+   * br+zstd, which is most player stacks; a Firefox UA is served the real
+   * playlist whatever the encoding header says. The decoy check stays as a
+   * safety net, and an unexplained master is still handed to the player. */
   function vidzyPageUrl(ref) {
     if (ref.type === 'tv') {
       return VIDZY + '/serie/' + encodeURIComponent(ref.id) + '/' + (ref.season || 1) + '/' + (ref.episode || 1) + '/vf';
@@ -562,8 +567,8 @@
     var headers = merge(VIDZY_STREAM_HEADERS, { 'Referer': embedUrl });
     var packed = null;
 
-    /* Best effort only: the module's own HTTP stack usually gets the decoy,
-     * while the device player uses the same signed URL on a native stack. */
+    /* Best effort only: the app player may still rewrite headers, so a failed
+     * or decoy probe must not invalidate the signed master. */
     try {
       var master = await fetchText(src, merge(headers, { 'Accept': 'application/vnd.apple.mpegurl,*/*' }), left(deadline, 4500));
       var text = normalizePlaylist(master.text);
