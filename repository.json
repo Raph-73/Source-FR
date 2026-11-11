@@ -3,13 +3,13 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1794399603626,
+  "publishedAtMs": 1794400753860,
   "bundle": {
-    "version": 11,
+    "version": 12,
     "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-11.zip",
-    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-11.zip",
-    "sha256": "6915b422ad129071c55cb1ab2297ade57edc780bb016ab6d5eb8bfeed798d6d6",
+    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-12.zip",
+    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-12.zip",
+    "sha256": "bf7ec2c4c1d19979cc25f626f449af5cd652cde0a1d20c98844da8d39fa36bba",
     "signature": ""
   },
   "modules": [
@@ -107,6 +107,33 @@
           "sub"
         ],
         "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
+      },
+      "signature": ""
+    },
+    {
+      "moduleId": "streamflix-v1",
+      "moduleFamilyId": "streamflix_v1",
+      "moduleIdentity": "SP-VID-9004-STREAMFLIX",
+      "moduleIdentityNumber": 9004,
+      "contentType": "video",
+      "version": "1.0.0-beta.1",
+      "minAppVersion": "8.0.0",
+      "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/StreamFlix/dist/StreamFlix-1.0.0-beta.1.zip",
+      "packagePath": "/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/StreamFlix/dist/StreamFlix-1.0.0-beta.1.zip",
+      "sha256": "a03204b1931649bc96cc1f1ed532b2b8d4fc98036a0945315c56d6bf553a2349",
+      "publishedAtMs": 1794400753860,
+      "changelog": [
+        "1.0.0-beta.1: New StreamFlix module (stream-flix.lol): French VF catalogue of 8,000+ movies and 850+ series with search, details, seasons/episodes and discovery (a la une, latest additions, best rated). Search hits the site index first and, when an unaccented query returns nothing (\"odyssee\" vs \"L'Odyssee\"), falls back to TMDB multi-search filtered through the catalogue lookup so only playable titles appear. Playback goes through the public video-url API: the CDN answers two 302 hops (proxy, then a signed ?ff= MP4 link), and the module resolves both with Range probes and hands the player and the downloader the signed file with the exact headers, instead of a routing URL that loses headers on redirect. Files are progressive MP4 (streamType mp4, downloadable); measured renditions include The Odyssey 1920x1080, Outer Banks S1 1920x960, The Rookie S1 1080p and S8 720p, Dune Prophecy 1920x960. The site's own quality field (HD) is what the picker reports. Titles or episodes without a file fail with an explicit message."
+      ],
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone (VF)",
+        "recommended": false,
+        "language": "Francais (VF)",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://stream-flix.lol/logo.png"
       },
       "signature": ""
     }

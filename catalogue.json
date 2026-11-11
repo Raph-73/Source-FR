@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 11,
-  "bundleFile": "bundles/Ney-Source-Bundle-11.zip",
+  "bundleVersion": 12,
+  "bundleFile": "bundles/Ney-Source-Bundle-12.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -69,6 +69,22 @@
         "1.0.0-beta.3: Player and quality in one picker. Vidzy (the site's first player) is now the default reader: its page, embed, HLS key and playlist are resolved first, and it is only offered when its media playlist and first segment answer as real media. The HD reader and the moviez source are resolved in parallel and their renditions appear in the same Quality list (for example \"Moviez VOSTFR · 1080p\"), so the viewer switches player and quality from one menu.",
         "1.0.0-beta.2: Playback now starts on the titles the HD reader does not index. The resolver reads the reader session id from its own script, tries every announced source in availability order (including the one it first flags unverified), waits out the warming answer instead of mistaking it for a failure, follows the HLS proxy player used by recent releases, and stops rejecting playable playlists because of a host-name check. When the HD reader has no usable lane, the moviez source of the same catalogue takes over in VF (VOSTFR when VF is missing). Popular titles that used to end on \"le lecteur HD n a pas fourni de flux lisible\" now play.",
         "1.0.0-beta.1: New CineRegal module (cineregal.onl): French TMDB catalogue with multi search, details, seasons/episodes and discovery (trending, popular, top rated). Playback goes through the site's public HD reader (fluxora.sbs): the signed HLS gateway is resolved from the embed page, validated, and every available rendition is exposed highest first. Titles without an available source fail with an explicit message."
+      ]
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/StreamFlix/dist/StreamFlix-1.0.0-beta.1.zip",
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone (VF)",
+        "recommended": false,
+        "language": "Francais (VF)",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://stream-flix.lol/logo.png"
+      },
+      "changelog": [
+        "1.0.0-beta.1: New StreamFlix module (stream-flix.lol): French VF catalogue of 8,000+ movies and 850+ series with search, details, seasons/episodes and discovery (a la une, latest additions, best rated). Search hits the site index first and, when an unaccented query returns nothing (\"odyssee\" vs \"L'Odyssee\"), falls back to TMDB multi-search filtered through the catalogue lookup so only playable titles appear. Playback goes through the public video-url API: the CDN answers two 302 hops (proxy, then a signed ?ff= MP4 link), and the module resolves both with Range probes and hands the player and the downloader the signed file with the exact headers, instead of a routing URL that loses headers on redirect. Files are progressive MP4 (streamType mp4, downloadable); measured renditions include The Odyssey 1920x1080, Outer Banks S1 1920x960, The Rookie S1 1080p and S8 720p, Dune Prophecy 1920x960. The site's own quality field (HD) is what the picker reports. Titles or episodes without a file fail with an explicit message."
       ]
     }
   ],
