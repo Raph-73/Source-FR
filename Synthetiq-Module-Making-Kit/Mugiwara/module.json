@@ -3,8 +3,8 @@
   "name": "Mugiwara",
   "contentType": "video",
   "contractVersion": 4,
-  "moduleVersion": "1.0.0-beta.2",
-  "version": "1.0.0-beta.2",
+  "moduleVersion": "1.0.0-beta.3",
+  "version": "1.0.0-beta.3",
   "moduleFamilyId": "mugiwara_v1",
   "moduleIdentity": "SP-VID-9005-MUGIWARA",
   "moduleIdentityNumber": 9005,
@@ -16,7 +16,10 @@
     "purpose": "French anime catalogue (VOSTFR / VF)",
     "recommended": false,
     "language": "French (VOSTFR / VF)",
-    "languages": ["sub", "dub"],
+    "languages": [
+      "sub",
+      "dub"
+    ],
     "iconUrl": "https://www.mugiwara-no-streaming.com/icone-512.png"
   },
   "config": {

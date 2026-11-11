@@ -270,7 +270,30 @@
       if (seasons[i] && seasons[i].image) { firstImage = seasons[i].image; break; }
     }
 
-    var poster = assetUrl(ref.slug, firstImage, 600) || assetUrl(ref.slug, options.affiche, 600);
+    /* Season posters range from 300x400 to 1920x2880 without exposed
+     * dimensions. Probing the first and last seasons of the 1920 variant and
+     * keeping the heaviest one avoids handing the header a 736 px poster when
+     * a 1920 px one exists for the same title. */
+    var artPath = firstImage;
+    var paths = [];
+    for (i = 0; i < seasons.length; i++) {
+      var img = seasons[i] && seasons[i].image;
+      if (img && paths.indexOf(img) === -1) paths.push(img);
+    }
+    if (paths.length > 1) {
+      var probe = paths.length <= 6 ? paths : paths.slice(0, 3).concat(paths.slice(-3));
+      var urls = probe.map(function (p) { return assetUrl(ref.slug, p, 1920); });
+      var sizes = await Promise.all(urls.map(function (u) {
+        return u ? headSize(u, 2500) : Promise.resolve(0);
+      }));
+      var best = -1, bestSize = 0;
+      for (i = 0; i < sizes.length; i++) {
+        if (sizes[i] > bestSize) { bestSize = sizes[i]; best = i; }
+      }
+      if (best >= 0 && bestSize >= ART_MIN_BYTES) artPath = probe[best];
+    }
+
+    var poster = assetUrl(ref.slug, artPath, 1920) || assetUrl(ref.slug, options.affiche, 1920);
     var banner = assetUrl(ref.slug, options.affiche, 1280);
     var genres = [], themes = [];
     var cats = Array.isArray(anime.category) ? anime.category : [];
@@ -296,7 +319,10 @@
       seasons: seasons.length
     };
     if (anime.type) out.demographic = clean(anime.type);
-    if (banner) { out.banner = banner; out.backdrop = banner; }
+    /* The home header paints `backdrop` full-screen and crop-fills it, so a
+     * 16:9 key art loses its sides and looks zoomed. Only the portrait season
+     * poster is exposed; the wide affiche stays in `banner`. */
+    if (banner) out.banner = banner;
 
     var total = 0;
     for (i = 0; i < seasons.length; i++) {
@@ -651,7 +677,7 @@
    * so the hero rotates through the best-rated catalogue instead. */
   var HERO_SIZE = 6;
   var HERO_POOL = 16;
-  var HERO_MIN_BYTES = 160000;
+  var ART_MIN_BYTES = 160000;
   var HERO_SKIP = { 'jojos-bizarre-adventure': true };
 
   async function headSize(url, timeoutMs) {
@@ -689,7 +715,7 @@
         return url ? headSize(url, left(deadline, 2500)) : Promise.resolve(0);
       }));
       for (var j = 0; j < chunk.length; j++) {
-        if (sizes[j] >= HERO_MIN_BYTES) chosen.push(chunk[j]);
+        if (sizes[j] >= ART_MIN_BYTES) chosen.push(chunk[j]);
         else fallback.push(chunk[j]);
       }
     }
