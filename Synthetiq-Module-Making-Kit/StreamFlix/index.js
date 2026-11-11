@@ -575,12 +575,76 @@
     return { streams: [], subtitles: [], lang: 'dub', error: { message: message } };
   }
 
+  /* -------------------------------------------------------- intro / outro */
+  /* The site's player asks its own IntroDB proxy for skip markers. Only TV
+   * episodes have them; movies and episodes IntroDB does not cover must go
+   * without the fields, so every failure here is silent. */
+  var IMDB_TTL = 7 * 24 * 60 * 60 * 1000;
+  var SEGMENT_TTL = 30 * 60 * 1000;
+  var imdbCache = {};
+  var segmentCache = {};
+
+  function markerOf(seg) {
+    if (!seg || typeof seg !== 'object') return null;
+    var start = num(seg.start_sec), end = num(seg.end_sec);
+    if (!(end > start)) { start = num(seg.start_ms) / 1000; end = num(seg.end_ms) / 1000; }
+    if (!(end > start) || start < 0) return null;
+    return { start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 };
+  }
+
+  async function imdbIdOf(tmdbId, deadline) {
+    var key = String(tmdbId);
+    var hit = imdbCache[key];
+    if (hit && now() - hit.at < IMDB_TTL) return hit.id;
+    try {
+      var r = await api('/tmdb/tv/' + enc(key) + '/external_ids?language=fr-FR', deadline, 7000);
+      var id = r.status === 200 && r.data ? String(r.data.imdb_id || '') : '';
+      if (/^tt\d+$/.test(id)) {
+        imdbCache[key] = { id: id, at: now() };
+        return id;
+      }
+    } catch (_) { /* markers stay optional */ }
+    return '';
+  }
+
+  async function markersFor(tmdbId, season, episode, deadline) {
+    var key = String(tmdbId) + ':' + season + ':' + episode;
+    var hit = segmentCache[key];
+    if (hit && now() - hit.at < SEGMENT_TTL) return hit.markers;
+    var imdb = await imdbIdOf(tmdbId, deadline);
+    if (!imdb) return null;
+    try {
+      var r = await api('/introdb/segments?imdb_id=' + enc(imdb) +
+        '&season=' + enc(season) + '&episode=' + enc(episode), deadline, 7000);
+      if (r.status !== 200 || !r.data) return null;
+      var markers = { intro: markerOf(r.data.intro), outro: markerOf(r.data.outro) };
+      segmentCache[key] = { markers: markers, at: now() };
+      return markers;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function withMarkers(packed, markers) {
+    if (!packed || !markers) return packed;
+    if (markers.intro) packed.intro = markers.intro;
+    if (markers.outro) packed.outro = markers.outro;
+    return packed;
+  }
+
   async function extractStreamUrl(episodeHref, lang) {
     var ref = parseRef(episodeHref);
     if (!ref) return streamFail('StreamFlix : identifiant invalide.');
     if (ref.type === 'tv' && (!ref.season || !ref.episode)) { ref.season = ref.season || 1; ref.episode = ref.episode || 1; }
 
     var deadline = now() + 22000;
+
+    /* Skip markers are independent of the video file, so they are requested in
+     * parallel; withMarkers() drops whatever did not arrive. */
+    var markers = ref.type === 'tv'
+      ? markersFor(ref.id, ref.season || 1, ref.episode || 1, deadline).catch(function () { return null; })
+      : null;
+
     var by = await api('/catalog/by-tmdb/' + (ref.type === 'tv' ? 'tv' : 'movie') + '/' + enc(ref.id), deadline, 11000);
     if (by.status !== 200 || !by.data || !by.data.id) {
       return streamFail('StreamFlix : ce titre n\'est pas dans le catalogue du site.');
@@ -605,14 +669,15 @@
     var hls = data.isHls === true || /\.m3u8(?:\?|$|&)/i.test(raw);
     if (hls) {
       try {
-        return await packHls(resolveUrl(SITE + '/', raw), deadline);
+        var playlist = await packHls(resolveUrl(SITE + '/', raw), deadline);
+        return withMarkers(playlist, await markers);
       } catch (_) {
         return streamFail('StreamFlix : la playlist n\'a pas pu etre lue.');
       }
     }
 
     var target = await resolveSigned(resolveUrl(SITE + '/', raw), deadline);
-    return packProgressive(target, data);
+    return withMarkers(packProgressive(target, data), await markers);
   }
 
   /* -------------------------------------------------------------- discovery */

@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 12,
-  "bundleFile": "bundles/Ney-Source-Bundle-12.zip",
+  "bundleVersion": 13,
+  "bundleFile": "bundles/Ney-Source-Bundle-13.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -72,7 +72,7 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/StreamFlix/dist/StreamFlix-1.0.0-beta.1.zip",
+      "file": "Synthetiq-Module-Making-Kit/StreamFlix/dist/StreamFlix-1.0.0-beta.2.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone (VF)",
@@ -84,6 +84,7 @@
         "iconUrl": "https://stream-flix.lol/logo.png"
       },
       "changelog": [
+        "1.0.0-beta.2: Episodes now carry the intro and outro skip markers the site's own player shows. The series' IMDb id is resolved through the site's TMDB proxy, the public IntroDB endpoint the site proxies is queried for the episode, and the segments are converted to seconds and validated (end after start) before being attached as intro/outro, the skip metadata of contract v4. The lookups run in parallel with the video resolution and are cached in memory (IMDb id 7 days, segments 30 min), so start-up time is unchanged. When IntroDB has no data for an episode the fields are simply absent and playback is untouched; movies never carry them. Recap and post-credits markers stay out because the contract has no field for them.",
         "1.0.0-beta.1: New StreamFlix module (stream-flix.lol): French VF catalogue of 8,000+ movies and 850+ series with search, details, seasons/episodes and discovery (a la une, latest additions, best rated). Search hits the site index first and, when an unaccented query returns nothing (\"odyssee\" vs \"L'Odyssee\"), falls back to TMDB multi-search filtered through the catalogue lookup so only playable titles appear. Playback goes through the public video-url API: the CDN answers two 302 hops (proxy, then a signed ?ff= MP4 link), and the module resolves both with Range probes and hands the player and the downloader the signed file with the exact headers, instead of a routing URL that loses headers on redirect. Files are progressive MP4 (streamType mp4, downloadable); measured renditions include The Odyssey 1920x1080, Outer Banks S1 1920x960, The Rookie S1 1080p and S8 720p, Dune Prophecy 1920x960. The site's own quality field (HD) is what the picker reports. Titles or episodes without a file fail with an explicit message."
       ]
     }
@@ -214,6 +215,13 @@
       "version": "1.0.0-beta.5",
       "sha256": "be507eb9a34e4c6ccf2d6d28deed18d7142951b06ce967151b07197ac84de5af",
       "retiredAtMs": 1794399603626
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/StreamFlix/dist/StreamFlix-1.0.0-beta.1.zip",
+      "moduleId": "streamflix-v1",
+      "version": "1.0.0-beta.1",
+      "sha256": "a03204b1931649bc96cc1f1ed532b2b8d4fc98036a0945315c56d6bf553a2349",
+      "retiredAtMs": 1794401513648
     }
   ]
 }
