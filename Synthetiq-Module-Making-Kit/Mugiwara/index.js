@@ -6,8 +6,11 @@
  * App Router pages whose data lives in the RSC flight payload, so details and
  * episode lists are read from the embedded "anime"/"animeServer" objects.
  * Playback: each season page lists, per language, host rows of per-episode
- * embed URLs. The embed (ansembed/voembed) publishes a signed HLS master whose
- * variants are validated here before being handed to the player.
+ * embed URLs. Airing seasons (Netflix/Crunchyroll simulcasts) publish those
+ * rows through the site's public episodes-script feed instead. Films use the
+ * FILM_OPTIONS rows exposed by /catalogue/<slug>/films/<film-slug>. The embed
+ * (ansembed/voembed) publishes a signed HLS master whose variants are
+ * validated here before being handed to the player.
  * ==========================================================================*/
 
 (function () {
@@ -75,6 +78,19 @@
   function episodeUrl(slug, season, episode) {
     return siteUrl(slug) + '/episodes/saison' + enc(season) + '#ep-' + enc(episode);
   }
+  function filmUrl(slug, film) {
+    return siteUrl(slug) + '/films/' + enc(film);
+  }
+
+  /* The site builds film routes from the film name: apostrophes are dropped,
+   * accents folded, everything else non-alphanumeric becomes a dash
+   * ("L'Aventure de l'Île de l'Horloge" -> "laventure-de-lile-de-lhorloge"). */
+  function filmSlug(name) {
+    return String(name == null ? '' : name)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/['\u2019\u02bc]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
 
   /* Artwork: <static>/w{300|600|1280|1920}/Animes/<slug>/<path>[.webp] is the
    * site's own variant scheme. Season images are portrait posters; the
@@ -91,15 +107,22 @@
   }
 
   /* ------------------------------------------------------------ identities */
-  /* Accepted: a site title URL, an episode URL (…#ep-N), a bare slug, or
-   * mugiwara:<slug>[:s<season>:e<episode>]. */
+  /* Accepted: a site title URL, a season URL (…#ep-N), a film URL, a bare
+   * slug, or mugiwara:<slug>[:s<season>:e<episode>]. */
   function parseRef(input) {
     var raw = String(input == null ? '' : input).trim();
     if (!raw) return null;
 
     var se = raw.match(/#ep-(\d+)/i) || raw.match(/[?&]episode=(\d+)/i);
+    var fi = raw.match(/#film-(\d+)/i);
 
-    var m = raw.match(/\/catalogue\/([a-z0-9][a-z0-9._-]*)(?:\/episodes\/saison([a-z0-9]+))?/i);
+    var m = raw.match(/\/catalogue\/([a-z0-9][a-z0-9._-]*)\/films\/([^\/?#]+)/i);
+    if (m) {
+      var film = { slug: m[1].toLowerCase(), film: decodeURIComponent(m[2]).toLowerCase() };
+      if (fi) film.filmIndex = Number(fi[1]);
+      return film;
+    }
+    m = raw.match(/\/catalogue\/([a-z0-9][a-z0-9._-]*)(?:\/episodes\/saison([a-z0-9]+))?/i);
     if (m) {
       var ref = { slug: m[1].toLowerCase() };
       if (m[2]) {
@@ -216,6 +239,46 @@
     } catch (_) { return null; }
   }
 
+  function filmOptionsOf(options) {
+    var fo = options && options.FILM_OPTIONS;
+    return fo && Array.isArray(fo.names) && fo.names.length ? fo : null;
+  }
+
+  /* Film cards link to /catalogue/<slug>/films/<film-slug>; the links keep
+   * the FILM_OPTIONS.names order, which is the index the player expects. */
+  function filmLinksFrom(html, slug) {
+    var out = [], seen = {}, re = /<a\b[^>]*href="\/catalogue\/([^"\/]+)\/films\/([^"\/?#]+)"/gi, m;
+    while ((m = re.exec(String(html || ''))) !== null) {
+      if (String(m[1]).toLowerCase() !== String(slug).toLowerCase()) continue;
+      var key = decodeURIComponent(m[2]).toLowerCase();
+      if (seen[key]) continue;
+      seen[key] = true;
+      out.push(key);
+    }
+    return out;
+  }
+
+  /* Portrait posters: season images first, then film posters for one-shots
+   * such as 5 Centimeters per Second that have no seasons at all. */
+  function artworkPaths(options) {
+    var paths = [], i;
+    var seasons = options && Array.isArray(options.saisons) ? options.saisons : [];
+    for (i = 0; i < seasons.length; i++) {
+      var img = seasons[i] && seasons[i].image;
+      if (img && paths.indexOf(img) === -1) paths.push(img);
+    }
+    if (!paths.length) {
+      var fo = filmOptionsOf(options);
+      if (fo) {
+        for (i = 0; i < fo.names.length; i++) {
+          var fim = fo.names[i] && fo.names[i].image;
+          if (fim && paths.indexOf(fim) === -1) paths.push(fim);
+        }
+      }
+    }
+    return paths;
+  }
+
   /* ----------------------------------------------------------------- cards */
   function cardsFrom(items, limit, hero) {
     var out = [], seen = {}, i;
@@ -265,21 +328,14 @@
 
     var options = anime.options || {};
     var seasons = Array.isArray(options.saisons) ? options.saisons : [];
-    var firstImage = '', i;
-    for (i = 0; i < seasons.length; i++) {
-      if (seasons[i] && seasons[i].image) { firstImage = seasons[i].image; break; }
-    }
+    var films = filmOptionsOf(options);
+    var paths = artworkPaths(options);
 
     /* Season posters range from 300x400 to 1920x2880 without exposed
-     * dimensions. Probing the first and last seasons of the 1920 variant and
+     * dimensions. Probing the first and last posters of the 1920 variant and
      * keeping the heaviest one avoids handing the header a 736 px poster when
      * a 1920 px one exists for the same title. */
-    var artPath = firstImage;
-    var paths = [];
-    for (i = 0; i < seasons.length; i++) {
-      var img = seasons[i] && seasons[i].image;
-      if (img && paths.indexOf(img) === -1) paths.push(img);
-    }
+    var artPath = paths[0] || '', i;
     if (paths.length > 1) {
       var probe = paths.length <= 6 ? paths : paths.slice(0, 3).concat(paths.slice(-3));
       var urls = probe.map(function (p) { return assetUrl(ref.slug, p, 1920); });
@@ -324,11 +380,31 @@
      * poster is exposed; the wide affiche stays in `banner`. */
     if (banner) out.banner = banner;
 
-    var total = 0;
+    var total = 0, unknown = [], u;
     for (i = 0; i < seasons.length; i++) {
-      var count = num(seasons[i] && seasons[i].episodesCount);
-      if (!count && seasons[i] && Array.isArray(seasons[i].episodesName)) count = seasons[i].episodesName.length;
+      /* The grid only lists numeric seasons, so side content ("1hs", "oav")
+       * must not inflate the advertised total. */
+      if (!/^\d+$/.test(String(seasons[i] && seasons[i].id))) continue;
+      var count = seasonEpisodeCount(seasons[i]);
       total += count;
+      if (!count) unknown.push(seasons[i]);
+    }
+    /* Airing seasons declare no episode count, so the fiche would advertise
+     * 48 episodes while the grid lists 54. The public player feed is the same
+     * source the episode list uses, so the total stays truthful. */
+    if (unknown.length) {
+      var lecture = options.EPISODES_OPTIONS ? options.EPISODES_OPTIONS.lecture : '';
+      var extra = lecture ? await mapLimit(unknown, 3, function (season) {
+        var until = now() + 6000;
+        return seasonScriptRows(lecture, String(season.id), 'vostfr', until)
+          .then(function (rows) { return maxRowLength(rows); })
+          .catch(function () { return 0; });
+      }) : [];
+      for (u = 0; u < extra.length; u++) total += extra[u];
+    }
+    if (films) {
+      out.films = films.names.length;
+      total += films.names.length;
     }
     if (total) out.episodes = total;
     return out;
@@ -345,6 +421,92 @@
     return byOrder && byOrder.name ? clean(byOrder.name) : '';
   }
 
+  function seasonEpisodeCount(season) {
+    var count = num(season && season.episodesCount);
+    if (!count && season && Array.isArray(season.episodesName)) count = season.episodesName.length;
+    return count;
+  }
+
+  function maxRowLength(rows) {
+    var max = 0, i, key;
+    if (!rows) return 0;
+    if (Array.isArray(rows)) {
+      for (i = 0; i < rows.length; i++) {
+        if (Array.isArray(rows[i])) max = Math.max(max, rows[i].length);
+      }
+      return max;
+    }
+    for (key in rows) if (Object.prototype.hasOwnProperty.call(rows, key)) max = Math.max(max, maxRowLength(rows[key]));
+    return max;
+  }
+
+  function parseScriptRows(text) {
+    var rows = [], re = /var\s+eps\d+\s*=\s*(\[[^\]]*\])/g, m;
+    while ((m = re.exec(String(text == null ? '' : text))) !== null) {
+      try {
+        var arr = JSON.parse(m[1]);
+        if (Array.isArray(arr)) rows.push(arr.map(function (u) { return String(u == null ? '' : u); }));
+      } catch (_) { /* one malformed host row */ }
+    }
+    return rows;
+  }
+
+  var API_HEADERS = {
+    'User-Agent': UA,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'fr-FR,fr;q=0.9',
+    'Referer': SITE + '/'
+  };
+
+  /* Airing seasons (Netflix/Crunchyroll simulcasts) have no host rows in the
+   * flight payload. Their released episodes are published by the site's own
+   * public player feed: /api/episodes-script/version gives the file version,
+   * then /api/episodes-script returns `var epsN = [...]` where N is a host and
+   * each entry is the URL for one episode. */
+  async function seasonScriptRows(lecture, seasonId, lang, deadline) {
+    if (!lecture) return [];
+    var prefix = 't=' + enc(lecture) + '&saison=' + enc(seasonId) + '&lang=' + enc(lang);
+    var ver = await fetchJson(SITE + '/api/episodes-script/version?' + prefix, API_HEADERS, 'GET', null, left(deadline, 6000));
+    var filever = ver && ver.data && ver.data.filever ? String(ver.data.filever) : '';
+    if (!filever) return [];
+    var js = await fetchText(SITE + '/api/episodes-script?' + prefix + '&filever=' + enc(filever), API_HEADERS, left(deadline, 8000));
+    if (js.status !== 200) return [];
+    return parseScriptRows(js.text);
+  }
+
+  async function releasedCount(slug, season, deadline) {
+    var page = await fetchText(siteUrl(slug) + '/episodes/saison' + enc(season.id), HTML_HEADERS, left(deadline, 8000));
+    if (page.status !== 200) return 0;
+    var anime = animeOfSeason(page.text);
+    if (!anime) return 0;
+
+    var list = Array.isArray(anime.options.saisons) ? anime.options.saisons : [];
+    var self = null, i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && String(list[i].id) === String(season.id)) { self = list[i]; break; }
+    }
+    var count = self ? maxRowLength(self.lang) : 0;
+    if (count) return count;
+
+    var lecture = anime.options.EPISODES_OPTIONS ? anime.options.EPISODES_OPTIONS.lecture : '';
+    var rows = await seasonScriptRows(lecture, String(season.id), 'vostfr', deadline);
+    return maxRowLength(rows);
+  }
+
+  async function mapLimit(items, limit, fn) {
+    var out = new Array(items.length), next = 0;
+    async function worker() {
+      while (next < items.length) {
+        var idx = next++;
+        out[idx] = await fn(items[idx], idx);
+      }
+    }
+    var workers = [], w;
+    for (w = 0; w < Math.min(limit, items.length); w++) workers.push(worker());
+    await Promise.all(workers);
+    return out;
+  }
+
   async function extractEpisodes(seriesId) {
     var ref = parseRef(seriesId);
     if (!ref) throw new Error('Mugiwara : identifiant invalide.');
@@ -357,19 +519,32 @@
     var seasons = Array.isArray(options.saisons) ? options.saisons : [];
     var globalNames = (options.EPISODES_OPTIONS && Array.isArray(options.EPISODES_OPTIONS.names))
       ? options.EPISODES_OPTIONS.names : [];
+    var deadline = now() + 25000;
 
-    var out = [], offset = 0, s, e;
+    var counts = [], missing = [], s;
+    for (s = 0; s < seasons.length; s++) {
+      var handled = /^\d+$/.test(String(seasons[s] && seasons[s].id));
+      counts.push(handled ? seasonEpisodeCount(seasons[s]) : 0);
+      if (handled && !counts[s]) missing.push(s);
+    }
+    if (missing.length) {
+      var derived = await mapLimit(missing, 5, function (idx) {
+        return releasedCount(ref.slug, seasons[idx], deadline).catch(function () { return 0; });
+      });
+      for (s = 0; s < missing.length; s++) counts[missing[s]] = derived[s];
+    }
+
+    var out = [], offset = 0;
     for (s = 0; s < seasons.length; s++) {
       var season = seasons[s] || {};
       var id = String(season.id == null ? '' : season.id);
       if (!/^\d+$/.test(id)) continue; /* side content ("1hs", "oav") stays out */
-      var count = num(season.episodesCount);
-      var ownNames = Array.isArray(season.episodesName) ? season.episodesName : [];
-      if (!count && ownNames.length) count = ownNames.length;
+      var count = counts[s];
       if (!count) continue;
+      var ownNames = Array.isArray(season.episodesName) ? season.episodesName : [];
 
       var image = assetUrl(ref.slug, season.image, 300);
-      for (e = 1; e <= count; e++) {
+      for (var e = 1; e <= count; e++) {
         var title = ownNames.length ? nameFromList(ownNames, e) : '';
         if (!title) {
           var global = globalNames[offset + e - 1];
@@ -386,6 +561,26 @@
       }
       if (!ownNames.length) offset += count;
     }
+
+    /* Films live in FILM_OPTIONS.names and have no seasons at all, so they are
+     * appended as season-less entries ("5 Centimeters per Second" was empty). */
+    var films = filmOptionsOf(options);
+    if (films) {
+      var links = filmLinksFrom(page.text, ref.slug);
+      for (s = 0; s < films.names.length; s++) {
+        var filmName = clean(films.names[s] && films.names[s].name);
+        if (!filmName) continue;
+        var film = links[s] || filmSlug(filmName);
+        if (!film) continue;
+        out.push({
+          number: s + 1,
+          href: filmUrl(ref.slug, film) + '#film-' + s,
+          title: filmName,
+          season: null
+        });
+      }
+    }
+
     if (!out.length) throw new Error('Mugiwara : aucun episode liste pour ce titre.');
     return out;
   }
@@ -414,11 +609,12 @@
   /* Audio keys are not uniform: one season may expose "vf", another
    * "vf1"/"vf2" or "VF Crun.". "vostfr" is the only sub prefix; "va"/"vkr"
    * are other audio languages and are never served as French VF. */
-  function languageKeys(season, tag) {
+  function languageKeysIn(lang, tag) {
+    if (!lang) return [];
     var re = tag === 'dub' ? /^vf/i : /^vostfr/i;
     var keys = [], k;
-    for (k in season.lang) {
-      if (Object.prototype.hasOwnProperty.call(season.lang, k) && re.test(k)) keys.push(k);
+    for (k in lang) {
+      if (Object.prototype.hasOwnProperty.call(lang, k) && re.test(k)) keys.push(k);
     }
     function rank(key) {
       var l = key.toLowerCase();
@@ -429,20 +625,28 @@
     return keys;
   }
 
-  function embedCandidates(season, key, episode) {
-    var rows = season && season.lang ? season.lang[key] : null;
-    if (!Array.isArray(rows)) return [];
+  function languageKeys(season, tag) {
+    return languageKeysIn(season && season.lang, tag);
+  }
+
+  function embedAt(rows, index) {
     var urls = [], seen = {}, i;
+    if (!Array.isArray(rows) || index < 1) return urls;
     for (i = 0; i < rows.length; i++) {
       var row = rows[i];
-      if (!Array.isArray(row) || !row[episode - 1]) continue;
-      var url = String(row[episode - 1]).trim();
+      if (!Array.isArray(row) || !row[index - 1]) continue;
+      var url = String(row[index - 1]).trim();
       if (!/^https?:\/\//i.test(url) || seen[url]) continue;
       seen[url] = true;
       urls.push(url);
     }
     urls.sort(function (a, b) { return hostRank(a) - hostRank(b); });
     return urls;
+  }
+
+  function embedCandidates(season, key, episode) {
+    var rows = season && season.lang ? season.lang[key] : null;
+    return Array.isArray(rows) ? embedAt(rows, episode) : [];
   }
 
   function masterFromHtml(html, base) {
@@ -528,10 +732,61 @@
     });
   }
 
+  function filmIndexOf(names, ref) {
+    if (typeof ref.filmIndex === 'number' && ref.filmIndex >= 0 && ref.filmIndex < names.length) return ref.filmIndex;
+    var want = String(ref.film || '').toLowerCase();
+    for (var i = 0; i < names.length; i++) {
+      if (filmSlug(names[i] && names[i].name) === want) return i;
+    }
+    return -1;
+  }
+
+  /* Film pages carry FILM_OPTIONS.lang with one row per host; each row is the
+   * per-film URL list, so the film index picks the URL inside every row. */
+  async function extractFilmStream(ref, tag, deadline) {
+    var name = laneName(tag);
+    var page = await fetchText(filmUrl(ref.slug, ref.film), HTML_HEADERS, left(deadline, 13000));
+    if (page.status === 404) return streamFail('Mugiwara : ce film n\'existe pas.', tag);
+    if (page.status !== 200) return streamFail('Mugiwara : la page du film n\'a pas repondu (HTTP ' + page.status + ').', tag);
+    var anime = animeOfSeason(page.text);
+    var films = anime && filmOptionsOf(anime.options);
+    if (!films) return streamFail('Mugiwara : les lecteurs de ce film sont illisibles.', tag);
+
+    var index = filmIndexOf(films.names, ref);
+    if (index < 0) return streamFail('Mugiwara : ce film est introuvable dans la fiche.', tag);
+
+    var keys = languageKeysIn(films.lang, tag);
+    if (!keys.length) return streamFail('Mugiwara : ce film n\'a pas de ' + name + '.', tag);
+
+    var primary = await firstOk(keys.map(function (key) {
+      return probeEmbeds(embedAt(films.lang[key], index + 1), tag, deadline).catch(function () { return null; });
+    }));
+    if (!primary) return streamFail('Mugiwara : aucun lecteur ' + name + ' n\'a fourni de flux pour ce film.', tag);
+
+    return {
+      url: primary.url,
+      headers: STREAM_HEADERS,
+      streamType: 'hls',
+      quality: primary.quality,
+      defaultQuality: primary.defaultQuality,
+      streams: primary.streams,
+      qualities: primary.qualities,
+      servers: [primary.server],
+      subtitles: [],
+      lang: primary.lang,
+      provider: 'Mugiwara'
+    };
+  }
+
   async function resolveLane(season, key, tag, episode, deadline) {
     var urls = embedCandidates(season, key, episode);
     if (!urls.length) return null;
-    var picks = urls.slice(0, 3);
+    return probeEmbeds(urls, tag, deadline);
+  }
+
+  async function probeEmbeds(urls, tag, deadline) {
+    var picks = (urls || []).slice(0, 3);
+    if (!picks.length) return null;
 
     /* The first row is often uqload (domain-restricted) while the working
      * ansembed/voembed row sits behind it, so the known-good hosts are ranked
@@ -562,9 +817,11 @@
     if (!ref) return streamFail('Mugiwara : identifiant invalide.');
     var tag = laneTag(lang);
     var name = laneName(tag);
+    var deadline = now() + 22000;
+    if (ref.film) return extractFilmStream(ref, tag, deadline);
+
     var seasonId = ref.season || '1';
     var episode = Number(ref.episode) > 0 ? Number(ref.episode) : 1;
-    var deadline = now() + 22000;
 
     var page = await fetchText(siteUrl(ref.slug) + '/episodes/saison' + enc(seasonId), HTML_HEADERS, left(deadline, 13000));
     if (page.status === 404) return streamFail('Mugiwara : cette saison n\'existe pas.', tag);
@@ -577,17 +834,35 @@
     for (i = 0; i < seasons.length; i++) {
       if (seasons[i] && String(seasons[i].id) === String(seasonId)) { season = seasons[i]; break; }
     }
-    if (!season || !season.lang) return streamFail('Mugiwara : aucun lecteur pour cette saison.', tag);
+    if (!season) return streamFail('Mugiwara : aucun lecteur pour cette saison.', tag);
 
     /* Serve the language that was asked for; never silently substitute the
      * other audio track (a VF request must not come back as VOSTFR). */
     var keys = languageKeys(season, tag);
-    if (!keys.length) return streamFail('Mugiwara : cette saison n\'a pas de ' + name + '.', tag);
-
-    var primary = await firstOk(keys.map(function (k) {
+    var primary = keys.length ? await firstOk(keys.map(function (k) {
       return resolveLane(season, k, tag, episode, deadline).catch(function () { return null; });
-    }));
-    if (!primary) return streamFail('Mugiwara : aucun lecteur ' + name + ' n\'a fourni de flux pour cet episode.', tag);
+    })) : null;
+
+    /* Airing seasons carry no lang rows in the flight payload; their released
+     * episodes come from the public episodes-script feed instead. */
+    var feedRows = [];
+    if (!primary) {
+      var lecture = anime.options.EPISODES_OPTIONS ? anime.options.EPISODES_OPTIONS.lecture : '';
+      feedRows = lecture
+        ? await seasonScriptRows(lecture, String(seasonId), tag === 'dub' ? 'vf' : 'vostfr', deadline).catch(function () { return []; })
+        : [];
+      primary = await probeEmbeds(embedAt(feedRows, episode), tag, deadline);
+    }
+
+    if (!primary) {
+      /* A dubbed simulcast lags the subtitled one, so an episode listed for the
+       * season may not exist in the requested language yet. */
+      if (feedRows.length && !embedAt(feedRows, episode).length) {
+        return streamFail('Mugiwara : cet episode n\'est pas encore disponible en ' + name + '.', tag);
+      }
+      if (!keys.length) return streamFail('Mugiwara : cette saison n\'a pas de ' + name + '.', tag);
+      return streamFail('Mugiwara : aucun lecteur ' + name + ' n\'a fourni de flux pour cet episode.', tag);
+    }
 
     return {
       url: primary.url,
@@ -618,11 +893,8 @@
   }
 
   function firstSeasonImage(anime) {
-    var seasons = anime && anime.options && Array.isArray(anime.options.saisons) ? anime.options.saisons : [];
-    for (var i = 0; i < seasons.length; i++) {
-      if (seasons[i] && seasons[i].image) return seasons[i].image;
-    }
-    return '';
+    var paths = anime && anime.options ? artworkPaths(anime.options) : [];
+    return paths.length ? paths[0] : '';
   }
 
   function heroCardFrom(slug, item, anime) {
@@ -665,6 +937,8 @@
         if (!count && seasons[i] && Array.isArray(seasons[i].episodesName)) count = seasons[i].episodesName.length;
         total += count;
       }
+      var filmList = filmOptionsOf(options);
+      if (filmList) total += filmList.names.length;
       if (total) card.episodes = total;
     }
     return card;
