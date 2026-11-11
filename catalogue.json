@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 10,
-  "bundleFile": "bundles/Ney-Source-Bundle-10.zip",
+  "bundleVersion": 11,
+  "bundleFile": "bundles/Ney-Source-Bundle-11.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -50,7 +50,7 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.5.zip",
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.6.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone (VF)",
@@ -63,6 +63,7 @@
         "iconUrl": "https://cineregal.onl/images/cineregal_logo.png"
       },
       "changelog": [
+        "1.0.0-beta.6: Highest checked quality is now the default. Vidzy's own files cap at 480p (its master carries a single 864x488 rendition), while the moviez source of the same catalogue exposes 1080p and 720p for many titles, so the picker was opening the 480p file while taller renditions sat unused. Every checked rendition from every reader is now listed highest first and the tallest one opens: L'Odyssee, Masterplan and Fall 2 start at Moviez 1080p, Vidzy 480p and Moviez 720p remain selectable, and a title where only Vidzy exists (Outer Banks S01E01/E02) still plays. Each entry keeps its player name and quality. The Vidzy Firefox-UA fix from beta.5 is unchanged.",
         "1.0.0-beta.5: Outer Banks S01E01/E02 and every title that only exposes Vidzy now start. The Vidzy CDN answers a 176-byte self-looping decoy to Chrome/Edge fingerprints whose Accept-Encoding lacks br+zstd, which is what most player stacks send, and hard-blocks ExoPlayer/VLC/ffmpeg user agents, so the old headers left those episodes spinning on \"starting the video player\" forever while titles with an HD/Moviez fallback recovered. Vidzy requests now use a Firefox user agent with identity encoding: the CDN returns the real 488-byte master and its 330-segment media playlist whatever the player sends. The ladder is verified before returning; HD and Moviez fallbacks are unchanged.",
         "1.0.0-beta.4: Vidzy is now the default player and always appears first. Its CDN filters non-browser clients, so the module no longer discards it when its own probe receives the 177-byte decoy: the signed HLS master is handed to the app's player, which uses the device network stack, and is parsed into a real ladder when the probe does return it. Every picker entry now carries its player name (Vidzy, HD, Moviez) because the app relabels height-bearing entries, and HD/Moviez stay as labelled fallbacks where they offer a taller rendition.",
         "1.0.0-beta.3: Player and quality in one picker. Vidzy (the site's first player) is now the default reader: its page, embed, HLS key and playlist are resolved first, and it is only offered when its media playlist and first segment answer as real media. The HD reader and the moviez source are resolved in parallel and their renditions appear in the same Quality list (for example \"Moviez VOSTFR · 1080p\"), so the viewer switches player and quality from one menu.",
@@ -190,6 +191,13 @@
       "version": "1.0.0-beta.4",
       "sha256": "e1e3a5e0a15ddac718642d939d2b53960a0b525a657c8ed45d881014f720b138",
       "retiredAtMs": 1794398547229
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Cineregal/dist/CineRegal-1.0.0-beta.5.zip",
+      "moduleId": "cineregal-v1",
+      "version": "1.0.0-beta.5",
+      "sha256": "be507eb9a34e4c6ccf2d6d28deed18d7142951b06ce967151b07197ac84de5af",
+      "retiredAtMs": 1794399603626
     }
   ]
 }

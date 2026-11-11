@@ -3,10 +3,12 @@
  * ----------------------------------------------------------------------------
  * Catalogue + metadata: the site's own TMDB proxy (/api/tmdb) in fr-FR.
  * Playback: Vidzy (vidzy.org), the site's first player, is resolved from the
- * embed's signed HLS master and returns first. That master is fingerprint-
- * filtered at the CDN: Chrome/Edge fingerprints without br+zstd get a decoy
- * and player UAs are blocked, so Vidzy requests use a Firefox UA. HD
- * (fluxora.sbs) and moviez stay as labelled fallbacks. Every picker entry
+ * embed's signed HLS master. That master is fingerprint-filtered at the CDN:
+ * Chrome/Edge fingerprints without br+zstd get a decoy and player UAs are
+ * blocked, so Vidzy requests use a Firefox UA. HD (fluxora.sbs) and moviez are
+ * resolved in parallel; every checked rendition is listed highest first and the
+ * tallest one opens by default, so a title whose other reader carries
+ * 1080p/720p does not start on Vidzy's own 480p cap. Every picker entry
  * carries its player name.
  * ==========================================================================*/
 
@@ -480,26 +482,46 @@
     var order = readers.filter(function (r) { return !!(r && r.packed && r.packed.url); });
     if (!order.length) return null;
 
-    var entries = [], streams = [], labels = {};
-    function add(list, reader, limit) {
+    /* Every checked rendition from every reader is offered, highest first.
+     * Vidzy's own files cap at 480p while the moviez source often carries
+     * 1080p/720p for the same title, so the top entry is selected by real
+     * height and not by reader order; Vidzy stays listed for every title. */
+    var candidates = [], labels = {};
+    for (var r = 0; r < order.length; r++) {
+      var reader = order[r];
       var prefix = readerLabel(reader);
+      var list = reader.packed.qualities || [];
+      var limit = r === 0 ? 4 : 3;
       for (var i = 0; i < list.length && i < limit; i++) {
         var q = list[i];
         if (!q || !q.url) continue;
         var label = prefix + ' \u00b7 ' + q.label;
         if (labels[label]) continue;
         labels[label] = true;
-        entries.push({ label: label, url: q.url, headers: q.headers || reader.packed.headers });
-        streams.push(label, q.url);
+        candidates.push({
+          label: label,
+          url: q.url,
+          headers: q.headers || reader.packed.headers,
+          height: q.height || 0,
+          lang: reader.lang,
+          provider: reader.player,
+          seq: candidates.length
+        });
       }
     }
+    if (!candidates.length) return null;
 
-    add(order[0].packed.qualities || [], order[0], 4);
-    for (var r = 1; r < order.length; r++) add(order[r].packed.qualities || [], order[r], 2);
-    if (!entries.length) return null;
+    candidates.sort(function (a, b) {
+      return (b.height - a.height) || (a.seq - b.seq);
+    });
 
-    var primary = order[0];
-    var top = entries[0];
+    var entries = [], streams = [];
+    for (var c = 0; c < candidates.length; c++) {
+      entries.push({ label: candidates[c].label, url: candidates[c].url, headers: candidates[c].headers });
+      streams.push(candidates[c].label, candidates[c].url);
+    }
+
+    var top = candidates[0];
     return {
       url: top.url,
       headers: top.headers,
@@ -509,8 +531,8 @@
       streams: streams,
       qualities: entries,
       subtitles: [],
-      lang: primary.lang,
-      provider: primary.player,
+      lang: top.lang,
+      provider: top.provider,
       servers: order.map(function (r) {
         return {
           name: r.player,
@@ -820,10 +842,10 @@
     if (!ref) return streamFail('CineRegal : identifiant invalide.');
     if (ref.type === 'tv' && (!ref.season || !ref.episode)) { ref.season = ref.season || 1; ref.episode = ref.episode || 1; }
 
-    /* Vidzy is the site's default player and comes first. The other readers
-     * stay as labelled fallbacks: Vidzy's own files cap at 360-448p, so on a
-     * title where HD has a taller rendition the viewer can still pick it,
-     * and a title Vidzy does not carry still plays. */
+    /* The site's readers have different ceilings: Vidzy's own files stop at
+     * 480p, the moviez source often carries 1080p/720p. They are resolved in
+     * parallel and composed by real height, so the app opens the tallest
+     * checked rendition while Vidzy remains selectable in the picker. */
     var settled = await Promise.all([
       resolveVidzy(ref, now() + 11000).catch(function () { return null; }),
       resolveFluxora(ref, now() + 13000).catch(function () { return null; }),
