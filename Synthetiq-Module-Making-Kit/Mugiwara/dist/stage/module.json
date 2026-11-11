@@ -1,0 +1,45 @@
+{
+  "id": "mugiwara-v1",
+  "name": "Mugiwara",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.2",
+  "version": "1.0.0-beta.2",
+  "moduleFamilyId": "mugiwara_v1",
+  "moduleIdentity": "SP-VID-9005-MUGIWARA",
+  "moduleIdentityNumber": 9005,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "description": "Catalogue public Mugiwara-no Streaming (mugiwara-no-streaming.com) : animes en VOSTFR et VF avec recherche, fiches, saisons/episodes et decouverte (a la une, mieux notes, Action, catalogue A-Z). Lecture : chaque saison expose des lecteurs publics par langue ; le module interroge ansembed.net et voembed.net en priorite, lit la playlist HLS signee publiee par l'embed et expose les variantes reellement presentes (1080p et 480p sur les titres verifies), la plus haute par defaut. Aucun contournement de restriction, de compte, de paywall ou de DRM. Les langues disponibles sont celles du catalogue ; une langue demandee sans lecteur est signalee explicitement, sans substitution VOSTFR/VF. Les saisons annexes (hs/oav), les films et les entrees sans saison (one-shots) ne sont pas exposes.",
+  "presentation": {
+    "category": "Anime",
+    "purpose": "French anime catalogue (VOSTFR / VF)",
+    "recommended": false,
+    "language": "French (VOSTFR / VF)",
+    "languages": [
+      "sub",
+      "dub"
+    ],
+    "iconUrl": "https://www.mugiwara-no-streaming.com/icone-512.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 6
+    },
+    "baseUrl": "https://www.mugiwara-no-streaming.com",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+      "Referer": "https://www.mugiwara-no-streaming.com/"
+    }
+  }
+}

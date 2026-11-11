@@ -591,8 +591,128 @@
     }).join(' ');
   }
 
+  function firstSeasonImage(anime) {
+    var seasons = anime && anime.options && Array.isArray(anime.options.saisons) ? anime.options.saisons : [];
+    for (var i = 0; i < seasons.length; i++) {
+      if (seasons[i] && seasons[i].image) return seasons[i].image;
+    }
+    return '';
+  }
+
+  function heroCardFrom(slug, item, anime) {
+    var options = (anime && anime.options) || {};
+    /* Same artwork the selector scored, so the header never swaps a checked
+     * 1920 px season poster for a smaller one from the detail page. */
+    var portrait = (item && item.wallpaper) || firstSeasonImage(anime) || options.affiche || '';
+    var image = assetUrl(slug, portrait, 1920) || assetUrl(slug, options.affiche, 1920);
+    if (!image) return null;
+    var poster = assetUrl(slug, portrait, 600) || image;
+    var href = siteUrl(slug);
+    var card = {
+      id: href, href: href, type: 'video',
+      title: clean((anime && anime.anime) || (item && item.anime) || titleFromSlug(slug)),
+      image: image, poster: poster
+    };
+
+    if (anime) {
+      if (anime.synopsis) card.description = clean(anime.synopsis);
+      var genres = [], themes = [], i;
+      var cats = Array.isArray(anime.category) ? anime.category : [];
+      for (i = 0; i < cats.length; i++) {
+        var g = clean(cats[i]);
+        if (g && genres.indexOf(g) === -1) genres.push(g);
+      }
+      var rawThemes = Array.isArray(anime.themes) ? anime.themes : [];
+      for (i = 0; i < rawThemes.length; i++) {
+        var t = clean(rawThemes[i]);
+        if (t && themes.indexOf(t) === -1) themes.push(t);
+      }
+      if (genres.length) card.genres = genres;
+      if (themes.length) card.themes = themes;
+      card.status = anime.airing ? 'En cours' : 'Termine';
+      if (anime.type) card.demographic = clean(anime.type);
+      var seasons = Array.isArray(options.saisons) ? options.saisons : [];
+      if (seasons.length) card.seasons = seasons.length;
+      var total = 0;
+      for (i = 0; i < seasons.length; i++) {
+        var count = num(seasons[i] && seasons[i].episodesCount);
+        if (!count && seasons[i] && Array.isArray(seasons[i].episodesName)) count = seasons[i].episodesName.length;
+        total += count;
+      }
+      if (total) card.episodes = total;
+    }
+    return card;
+  }
+
+  /* The home header is a tall portrait frame. A 16:9 key art crop-filled into
+   * that frame keeps only a narrow centre slice and looks soft, so the hero
+   * uses the portrait season artwork at its largest variant and never sends
+   * `backdrop`. The site's own slide is static (it stayed on JoJo for days),
+   * so the hero rotates through the best-rated catalogue instead. */
+  var HERO_SIZE = 6;
+  var HERO_POOL = 16;
+  var HERO_MIN_BYTES = 160000;
+  var HERO_SKIP = { 'jojos-bizarre-adventure': true };
+
+  async function headSize(url, timeoutMs) {
+    try {
+      var res = await fetchv2(url, { 'User-Agent': UA, 'Accept': 'image/webp,image/*,*/*' }, 'HEAD', null, { timeoutMs: timeoutMs });
+      var headers = (res && res.headers) || {};
+      var len = Number(headers['content-length'] || headers['Content-Length'] || 0);
+      return isFinite(len) && len > 0 ? len : 0;
+    } catch (_) { return 0; }
+  }
+
+  async function heroItemsFrom(items, deadline) {
+    var pool = [], seen = {}, i;
+    for (i = 0; i < (items || []).length && pool.length < HERO_POOL; i++) {
+      var it = items[i] || {};
+      var slug = String(it.slug || '').trim().toLowerCase();
+      if (!slug || seen[slug] || HERO_SKIP[slug]) continue;
+      if (!clean(it.anime || '') || (!it.wallpaper && !it.affiche)) continue;
+      seen[slug] = true;
+      it.slug = slug;
+      pool.push(it);
+    }
+    if (!pool.length) return [];
+
+    /* Source posters range from 300x400 to 1920x2880 and the catalogue exposes
+     * no dimensions. The 1920 variant's byte size separates 500 px posters
+     * (40 KB) from 1200-1920 px ones (165-460 KB), so low-resolution titles are
+     * skipped. Chunks of six respect the request cap and stop as soon as six
+     * good posters are found. */
+    var chosen = [], fallback = [];
+    for (i = 0; i < pool.length && chosen.length < HERO_SIZE; i += 6) {
+      var chunk = pool.slice(i, i + 6);
+      var sizes = await Promise.all(chunk.map(function (cand) {
+        var url = assetUrl(cand.slug, cand.wallpaper || cand.affiche, 1920);
+        return url ? headSize(url, left(deadline, 2500)) : Promise.resolve(0);
+      }));
+      for (var j = 0; j < chunk.length; j++) {
+        if (sizes[j] >= HERO_MIN_BYTES) chosen.push(chunk[j]);
+        else fallback.push(chunk[j]);
+      }
+    }
+    chosen = chosen.slice(0, HERO_SIZE);
+    if (chosen.length < HERO_SIZE) chosen = chosen.concat(fallback).slice(0, HERO_SIZE);
+
+    var cards = await Promise.all(chosen.map(async function (it) {
+      var slug = String(it.slug || '').trim().toLowerCase();
+      var anime = null;
+      try {
+        var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 4500));
+        if (page.status === 200) anime = animeOfDetail(page.text);
+      } catch (_) { anime = null; }
+      return heroCardFrom(slug, it, anime);
+    }));
+
+    var out = [];
+    for (i = 0; i < cards.length; i++) if (cards[i]) out.push(cards[i]);
+    return out;
+  }
+
   async function heroCard(deadline) {
-    var home = await fetchText(SITE + '/', HTML_HEADERS, left(deadline, 3500));
+    var home = await fetchText(SITE + '/', HTML_HEADERS, left(deadline, 3000));
     if (home.status !== 200) return null;
     var raw = jsonAfter(flightText(home.text), '"premiereDiapositive":');
     if (!raw) return null;
@@ -605,32 +725,27 @@
       var detail = await fetchText(siteUrl(spot.slug), HTML_HEADERS, left(deadline, 3000));
       if (detail.status === 200) anime = animeOfDetail(detail.text);
     } catch (_) { anime = null; }
-
-    var wide = assetUrl(spot.slug, spot.affiche, 1280) || assetUrl(spot.slug, spot.wallpaper, 1280);
-    if (!wide) return null;
-    var poster = assetUrl(spot.slug, spot.wallpaper, 600);
-    var href = siteUrl(spot.slug);
-    var card = {
-      id: href, href: href, type: 'video',
-      title: anime ? clean(anime.anime) : titleFromSlug(spot.slug),
-      image: wide, backdrop: wide
-    };
-    if (poster) card.poster = poster;
-    if (anime && anime.synopsis) card.description = clean(anime.synopsis);
-    return card;
+    return heroCardFrom(spot.slug, spot, anime);
   }
 
   async function discoveryHome() {
-    var deadline = now() + 7200;
+    var deadline = now() + 8200;
     var results = await Promise.all([
       catalogue(baseBody('note'), deadline, 6200).catch(function () { return null; }),
       catalogue(baseBody('alpha'), deadline, 6200).catch(function () { return null; }),
-      catalogue(baseBody('note', ['Action']), deadline, 6200).catch(function () { return null; }),
-      heroCard(deadline).catch(function () { return null; })
+      catalogue(baseBody('note', ['Action']), deadline, 6200).catch(function () { return null; })
     ]);
     var sections = [];
 
-    if (results[3]) sections.push({ id: 'hero', title: 'A la une', style: 'hero', items: [results[3]] });
+    var heroItems = [];
+    if (results[0] && results[0].status === 200 && results[0].data && Array.isArray(results[0].data.animes)) {
+      heroItems = await heroItemsFrom(results[0].data.animes, deadline).catch(function () { return []; });
+    }
+    if (!heroItems.length) {
+      var fallback = await heroCard(deadline).catch(function () { return null; });
+      if (fallback) heroItems = [fallback];
+    }
+    if (heroItems.length) sections.push({ id: 'hero', title: 'A la une', style: 'hero', items: heroItems });
 
     var top = resultCards(results[0], 24);
     if (top.length) sections.push({
