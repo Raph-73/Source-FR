@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 13,
-  "bundleFile": "bundles/Ney-Source-Bundle-13.zip",
+  "bundleVersion": 14,
+  "bundleFile": "bundles/Ney-Source-Bundle-14.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -86,6 +86,23 @@
       "changelog": [
         "1.0.0-beta.2: Episodes now carry the intro and outro skip markers the site's own player shows. The series' IMDb id is resolved through the site's TMDB proxy, the public IntroDB endpoint the site proxies is queried for the episode, and the segments are converted to seconds and validated (end after start) before being attached as intro/outro, the skip metadata of contract v4. The lookups run in parallel with the video resolution and are cached in memory (IMDb id 7 days, segments 30 min), so start-up time is unchanged. When IntroDB has no data for an episode the fields are simply absent and playback is untouched; movies never carry them. Recap and post-credits markers stay out because the contract has no field for them.",
         "1.0.0-beta.1: New StreamFlix module (stream-flix.lol): French VF catalogue of 8,000+ movies and 850+ series with search, details, seasons/episodes and discovery (a la une, latest additions, best rated). Search hits the site index first and, when an unaccented query returns nothing (\"odyssee\" vs \"L'Odyssee\"), falls back to TMDB multi-search filtered through the catalogue lookup so only playable titles appear. Playback goes through the public video-url API: the CDN answers two 302 hops (proxy, then a signed ?ff= MP4 link), and the module resolves both with Range probes and hands the player and the downloader the signed file with the exact headers, instead of a routing URL that loses headers on redirect. Files are progressive MP4 (streamType mp4, downloadable); measured renditions include The Odyssey 1920x1080, Outer Banks S1 1920x960, The Rookie S1 1080p and S8 720p, Dune Prophecy 1920x960. The site's own quality field (HD) is what the picker reports. Titles or episodes without a file fail with an explicit message."
+      ]
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Mugiwara/dist/Mugiwara-1.0.0-beta.1.zip",
+      "presentation": {
+        "category": "Anime",
+        "purpose": "French anime catalogue (VOSTFR / VF)",
+        "recommended": false,
+        "language": "French (VOSTFR / VF)",
+        "languages": [
+          "sub",
+          "dub"
+        ],
+        "iconUrl": "https://www.mugiwara-no-streaming.com/icone-512.png"
+      },
+      "changelog": [
+        "1.0.0-beta.1: New Mugiwara module (mugiwara-no-streaming.com): public French anime catalogue in VOSTFR and VF with search, details, seasons/episodes and discovery (a la une, best rated, Action, A-Z catalogue). Playback reads the public ansembed/voembed embed of the selected episode, extracts the signed HLS master and lists the renditions actually present (1080p and 480p measured on checked titles), highest first. Audio keys are matched by language (vf, vf1/vf2, named VF rows) and the requested language is never silently swapped for the other one; a title or an episode without a reader fails with an explicit message. Side seasons (hs/oav), films and season-less one-shots stay out."
       ]
     }
   ],

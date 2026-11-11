@@ -3,13 +3,13 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1794401513648,
+  "publishedAtMs": 1794403696305,
   "bundle": {
-    "version": 13,
+    "version": 14,
     "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-13.zip",
-    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-13.zip",
-    "sha256": "414610be5c2308706fe2ca01ddc9ea48641175085d9a7e6a11b45c55f8f34fad",
+    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-14.zip",
+    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-14.zip",
+    "sha256": "36c043df7ea726451f3c5fc43a7c68682c79595bf4d89363d3cbe69a81a443d6",
     "signature": ""
   },
   "modules": [
@@ -135,6 +135,34 @@
           "dub"
         ],
         "iconUrl": "https://stream-flix.lol/logo.png"
+      },
+      "signature": ""
+    },
+    {
+      "moduleId": "mugiwara-v1",
+      "moduleFamilyId": "mugiwara_v1",
+      "moduleIdentity": "SP-VID-9005-MUGIWARA",
+      "moduleIdentityNumber": 9005,
+      "contentType": "video",
+      "version": "1.0.0-beta.1",
+      "minAppVersion": "8.0.0",
+      "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/Mugiwara/dist/Mugiwara-1.0.0-beta.1.zip",
+      "packagePath": "/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/Mugiwara/dist/Mugiwara-1.0.0-beta.1.zip",
+      "sha256": "ddfc6c52c0b1fe6d9370a08285466b5c100d1f3305d127f591f77cb745fa2384",
+      "publishedAtMs": 1794403696305,
+      "changelog": [
+        "1.0.0-beta.1: New Mugiwara module (mugiwara-no-streaming.com): public French anime catalogue in VOSTFR and VF with search, details, seasons/episodes and discovery (a la une, best rated, Action, A-Z catalogue). Playback reads the public ansembed/voembed embed of the selected episode, extracts the signed HLS master and lists the renditions actually present (1080p and 480p measured on checked titles), highest first. Audio keys are matched by language (vf, vf1/vf2, named VF rows) and the requested language is never silently swapped for the other one; a title or an episode without a reader fails with an explicit message. Side seasons (hs/oav), films and season-less one-shots stay out."
+      ],
+      "presentation": {
+        "category": "Anime",
+        "purpose": "French anime catalogue (VOSTFR / VF)",
+        "recommended": false,
+        "language": "French (VOSTFR / VF)",
+        "languages": [
+          "sub",
+          "dub"
+        ],
+        "iconUrl": "https://www.mugiwara-no-streaming.com/icone-512.png"
       },
       "signature": ""
     }
