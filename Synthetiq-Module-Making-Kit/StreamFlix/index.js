@@ -659,6 +659,12 @@
     if (r.status === 404 || data.notYetAired || data.notYetReleased || data._airDateBlock || data.missing) {
       return streamFail('StreamFlix : cet episode n\'est pas encore disponible.');
     }
+    /* The site now gates its player behind a browser anti-bot challenge
+     * ({"code":"human_required"} on the video-url endpoints). No module can
+     * satisfy that challenge, so report it instead of a bare HTTP error. */
+    if (data.code === 'human_required' || (r.status === 403 && /robot|human/i.test(String(data.error || '')))) {
+      return streamFail('StreamFlix : le site demande une verification anti-robot dans un navigateur avant de lancer la lecture. La lecture depuis l\'application n\'est donc pas possible pour le moment.');
+    }
     if (r.status !== 200) {
       return streamFail('StreamFlix : le serveur n\'a pas fourni de flux (HTTP ' + r.status + ').');
     }
