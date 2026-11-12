@@ -279,6 +279,44 @@
     return paths;
   }
 
+  /* "2-4" is the fourth cour of season 2 and comes after "2"; side rows
+   * ("1hs", "oav") carry no rank. */
+  function seasonRank(id) {
+    var m = String(id == null ? '' : id).match(/^(\d+)(?:-(\d+))?$/);
+    return m ? [Number(m[1]), Number(m[2] || 0)] : null;
+  }
+
+  /* The site's catalogue wallpaper is the current season's poster, so the fiche
+   * does the same: newest season first, older ones only as fallback. */
+  function artworkCandidates(options) {
+    var seasons = options && Array.isArray(options.saisons) ? options.saisons : [];
+    var ranked = [], i;
+    for (i = 0; i < seasons.length; i++) {
+      var img = seasons[i] && seasons[i].image;
+      var rank = seasonRank(seasons[i] && seasons[i].id);
+      if (!img || !rank) continue;
+      ranked.push({ image: img, rank: rank, order: ranked.length });
+    }
+    ranked.sort(function (a, b) {
+      if (a.rank[0] !== b.rank[0]) return b.rank[0] - a.rank[0];
+      if (a.rank[1] !== b.rank[1]) return b.rank[1] - a.rank[1];
+      return a.order - b.order;
+    });
+    var out = [], seen = {};
+    for (i = 0; i < ranked.length; i++) {
+      if (seen[ranked[i].image]) continue;
+      seen[ranked[i].image] = true;
+      out.push(ranked[i].image);
+    }
+    if (!out.length) return artworkPaths(options);
+    return out;
+  }
+
+  function latestSeasonImage(options) {
+    var list = artworkCandidates(options);
+    return list.length ? list[0] : '';
+  }
+
   /* ----------------------------------------------------------------- cards */
   function cardsFrom(items, limit, hero) {
     var out = [], seen = {}, i;
@@ -321,6 +359,7 @@
   async function extractDetails(urlOrId) {
     var ref = parseRef(urlOrId);
     if (!ref) throw new Error('Mugiwara : identifiant invalide.');
+    var deadline = now() + 20000;
     var page = await fetchText(siteUrl(ref.slug), HTML_HEADERS, 15000);
     if (page.status === 404) throw new Error('Mugiwara : cette fiche n\'existe pas.');
     var anime = page.status === 200 ? animeOfDetail(page.text) : null;
@@ -330,24 +369,12 @@
     var seasons = Array.isArray(options.saisons) ? options.saisons : [];
     var films = filmOptionsOf(options);
     var paths = artworkPaths(options);
+    var i;
 
     /* Season posters range from 300x400 to 1920x2880 without exposed
-     * dimensions. Probing the first and last posters of the 1920 variant and
-     * keeping the heaviest one avoids handing the header a 736 px poster when
-     * a 1920 px one exists for the same title. */
-    var artPath = paths[0] || '', i;
-    if (paths.length > 1) {
-      var probe = paths.length <= 6 ? paths : paths.slice(0, 3).concat(paths.slice(-3));
-      var urls = probe.map(function (p) { return assetUrl(ref.slug, p, 1920); });
-      var sizes = await Promise.all(urls.map(function (u) {
-        return u ? headSize(u, 2500) : Promise.resolve(0);
-      }));
-      var best = -1, bestSize = 0;
-      for (i = 0; i < sizes.length; i++) {
-        if (sizes[i] > bestSize) { bestSize = sizes[i]; best = i; }
-      }
-      if (best >= 0 && bestSize >= ART_MIN_BYTES) artPath = probe[best];
-    }
+     * dimensions. The current season's poster is preferred; a low-resolution
+     * variant falls back to the newest one that clears the size threshold. */
+    var artPath = await bestArtPath(ref.slug, options, deadline) || paths[0] || '';
 
     var poster = assetUrl(ref.slug, artPath, 1920) || assetUrl(ref.slug, options.affiche, 1920);
     var banner = assetUrl(ref.slug, options.affiche, 1280);
@@ -952,7 +979,34 @@
   var HERO_SIZE = 6;
   var HERO_POOL = 16;
   var ART_MIN_BYTES = 160000;
-  var HERO_SKIP = { 'jojos-bizarre-adventure': true };
+  var HERO_SKIP = {
+    'jojos-bizarre-adventure': true,
+    'bocchi-the-rock': true,
+    'journal-with-witch': true
+  };
+  /* The best-rated feed is only 20 titles and does not contain every requested
+   * header pick, so these are resolved by slug and placed first. */
+  var HERO_PICKS = ['bleach', 'the-ramparts-of-ice'];
+
+  async function heroPickItems(deadline) {
+    var cards = await Promise.all(HERO_PICKS.map(async function (slug) {
+      try {
+        var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 4000));
+        if (page.status !== 200) return null;
+        var anime = animeOfDetail(page.text);
+        if (!anime) return null;
+        var art = await bestArtPath(slug, anime.options, deadline);
+        if (!art) return null;
+        return {
+          slug: slug, anime: clean(anime.anime || '') || titleFromSlug(slug),
+          wallpaper: art, _anime: anime
+        };
+      } catch (_) { return null; }
+    }));
+    var out = [], i;
+    for (i = 0; i < cards.length; i++) if (cards[i]) out.push(cards[i]);
+    return out;
+  }
 
   async function headSize(url, timeoutMs) {
     try {
@@ -963,8 +1017,29 @@
     } catch (_) { return 0; }
   }
 
+  /* Newest season poster that clears the size gate; the heaviest probed one
+   * otherwise. One candidate needs no probe, so single-season titles stay fast. */
+  async function bestArtPath(slug, options, deadline) {
+    var cands = artworkCandidates(options);
+    if (!cands.length) return '';
+    if (cands.length === 1) return cands[0];
+    var probe = cands.slice(0, 6);
+    var sizes = await Promise.all(probe.map(function (p) {
+      var u = assetUrl(slug, p, 1920);
+      return u ? headSize(u, left(deadline, 2200)) : Promise.resolve(0);
+    }));
+    var fallback = -1, fallbackSize = 0, i;
+    for (i = 0; i < sizes.length; i++) {
+      if (sizes[i] >= ART_MIN_BYTES) return probe[i];
+      if (sizes[i] > fallbackSize) { fallbackSize = sizes[i]; fallback = i; }
+    }
+    return fallback >= 0 ? probe[fallback] : cands[0];
+  }
+
   async function heroItemsFrom(items, deadline) {
+    var picks = await heroPickItems(deadline);
     var pool = [], seen = {}, i;
+    for (i = 0; i < picks.length; i++) seen[picks[i].slug] = true;
     for (i = 0; i < (items || []).length && pool.length < HERO_POOL; i++) {
       var it = items[i] || {};
       var slug = String(it.slug || '').trim().toLowerCase();
@@ -974,14 +1049,14 @@
       it.slug = slug;
       pool.push(it);
     }
-    if (!pool.length) return [];
+    if (!pool.length && !picks.length) return [];
 
     /* Source posters range from 300x400 to 1920x2880 and the catalogue exposes
      * no dimensions. The 1920 variant's byte size separates 500 px posters
      * (40 KB) from 1200-1920 px ones (165-460 KB), so low-resolution titles are
      * skipped. Chunks of six respect the request cap and stop as soon as six
      * good posters are found. */
-    var chosen = [], fallback = [];
+    var chosen = picks.slice(0, HERO_SIZE), fallback = [];
     for (i = 0; i < pool.length && chosen.length < HERO_SIZE; i += 6) {
       var chunk = pool.slice(i, i + 6);
       var sizes = await Promise.all(chunk.map(function (cand) {
@@ -998,11 +1073,13 @@
 
     var cards = await Promise.all(chosen.map(async function (it) {
       var slug = String(it.slug || '').trim().toLowerCase();
-      var anime = null;
-      try {
-        var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 4500));
-        if (page.status === 200) anime = animeOfDetail(page.text);
-      } catch (_) { anime = null; }
+      var anime = it._anime || null;
+      if (!anime) {
+        try {
+          var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 4500));
+          if (page.status === 200) anime = animeOfDetail(page.text);
+        } catch (_) { anime = null; }
+      }
       return heroCardFrom(slug, it, anime);
     }));
 
