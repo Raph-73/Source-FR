@@ -1,0 +1,45 @@
+{
+  "id": "miaw-v1",
+  "name": "Miaw",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.1",
+  "version": "1.0.0-beta.1",
+  "moduleFamilyId": "miaw_v1",
+  "moduleIdentity": "SP-VID-9006-MIAW",
+  "moduleIdentityNumber": 9006,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "description": "Catalogue public Miaw (miaw.tv) : films et series en VF, recherche par titre via l'API du site, fiches detaillees (JSON-LD), saisons et episodes, et decouverte (a la une, films et series les mieux notes, derniers ajouts). Lecture : l'API watch du site liste ses lecteurs. Le lecteur blink remet un MP4 HD signe sur son CDN apres deux redirections, moviez remet un HLS adaptatif (1080p/720p/360p) et Vidzy un HLS VOSTFR ; le module pre-resout ces sources, verifie chaque fichier par une requete Range et liste toutes les qualites de la plus haute a la plus basse, avec le nom du lecteur. Une source indisponible n'empeche pas les autres de jouer ; si aucune ne repond, le lecteur affiche un message explicite.",
+  "presentation": {
+    "category": "Films & Series",
+    "purpose": "Catalogue francophone (VF et VOSTFR)",
+    "recommended": false,
+    "language": "Francais (VF / VOSTFR)",
+    "languages": [
+      "dub",
+      "sub"
+    ],
+    "iconUrl": "https://miaw.tv/brand/app/icon-512.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 6
+    },
+    "baseUrl": "https://miaw.tv",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+      "Referer": "https://miaw.tv/"
+    }
+  }
+}
