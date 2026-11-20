@@ -845,10 +845,9 @@
    * episode counts needed to place a site season on the MAL numbering: either
    * the site splits one MAL entry into arcs, or each TV season is its own MAL
    * entry reached through the SEQUEL chain. A mapping is used only when a
-   * season boundary matches exactly. AniSkip describes the original TV cut,
-   * which is what the VOSTFR streams carry; a French dub can be re-cut and the
-   * app auto-seeks on these ranges, so VF streams get no markers. Every
-   * failure is silent: playback never depends on them. */
+   * season boundary matches exactly. AniSkip times the original TV cut, so a
+   * re-cut French dub can sit a few seconds off; both languages still get the
+   * markers, and every failure is silent: playback never depends on them. */
   var ANISKIP = 'https://api.aniskip.com/v2/skip-times/';
   var ANILIST = 'https://graphql.anilist.co';
   var SKIP_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json' };
@@ -1081,7 +1080,7 @@
 
     /* Skip markers are independent of the stream, so the title page lookup
      * runs alongside the season page and never delays the reader probes. */
-    var plan = tag === 'sub' ? markerPlan(ref.slug, markerDeadline) : null;
+    var plan = markerPlan(ref.slug, markerDeadline);
 
     var page = await fetchText(siteUrl(ref.slug) + '/episodes/saison' + enc(seasonId), HTML_HEADERS, left(deadline, 13000));
     if (page.status === 404) return streamFail('Mugiwara : cette saison n\'existe pas.', tag);
