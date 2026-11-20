@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 23,
-  "bundleFile": "bundles/Ney-Source-Bundle-23.zip",
+  "bundleVersion": 24,
+  "bundleFile": "bundles/Ney-Source-Bundle-24.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -90,6 +90,22 @@
         "1.0.0-beta.3: The home header no longer receives a wide `backdrop` from details. The app paints that field full-screen and crop-filled the 16:9 affiche down to a narrow slice, so the header still looked massively zoomed even after hero cards switched to portrait posters. Detail pages now expose the portrait season poster as image/poster at the 1920 variant and keep the wide affiche only as `banner`, which is the combination the other French modules render correctly. Detail pages also probe the first and last season posters of a title (up to six HEAD requests, about 300 ms in parallel with the page read) and keep the heaviest one, so a title whose season 1 poster is only 736 px wide (One Piece) is served its 1920 px current-season poster instead. Playback is unchanged.",
         "1.0.0-beta.2: The home header now rotates through the best-rated catalogue instead of always replaying the site's static premiere (JoJo's Bizarre Adventure), presenting six titles at a time and excluding the static premiere. Hero artwork switches from the 16:9 key art to the portrait season poster at its largest variant and no longer sends `backdrop`, so the app's tall header no longer crop-fills a narrow slice of a landscape image. Source posters range from 300x400 to 1920x2880 with no dimensions exposed, so the module HEAD-checks the 1920 variant of each candidate and keeps only files of 160 KB or more (about 1200 px wide and above, measured 1200x1600 to 1920x2880; the 300-750 px posters weigh 16-90 KB) before choosing the six. The header shows exactly the artwork that was checked, never a smaller season image from the detail page. Hero cards also carry genres, themes, status, season and episode counts. Playback code is unchanged.",
         "1.0.0-beta.1: New Mugiwara module (mugiwara-no-streaming.com): public French anime catalogue in VOSTFR and VF with search, details, seasons/episodes and discovery (a la une, best rated, Action, A-Z catalogue). Playback reads the public ansembed/voembed embed of the selected episode, extracts the signed HLS master and lists the renditions actually present (1080p and 480p measured on checked titles), highest first. Audio keys are matched by language (vf, vf1/vf2, named VF rows) and the requested language is never silently swapped for the other one; a title or an episode without a reader fails with an explicit message. Side seasons (hs/oav), films and season-less one-shots stay out."
+      ]
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Metaflix/dist/MetaFlix-1.0.0-beta.1.zip",
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone (VF)",
+        "recommended": false,
+        "language": "Francais (VF)",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://metaflix.fr/apple-touch-icon.png"
+      },
+      "changelog": [
+        "1.0.0-beta.1: New MetaFlix module (metaflix.fr): French catalogue with search, details, seasons/episodes and discovery (a la une, top 10, tendances, nouveautes, mieux notes, populaires, genres). Playback mirrors the site's own choice between its signed zen-cdn MP4 (verified with a one-byte Range, site Referer) and its segmented HLS (/api/v/, French and English audio, source VTT subtitles); the MP4 stays the default unless the title is flagged heavy, mixed-audio or low quality for the season. Intro markers from the site are forwarded, lists are cached and HTTP 429 is reported with a retry message. Local checks passed on Better Call Saul, The Mentalist, Spider-Man: Brand New Day; One Piece resolves its fMP4 HLS but the kit probe cannot sample init maps, and device playback, language and downloads remain unverified."
       ]
     }
   ],

@@ -3,13 +3,13 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "publishedAtMs": 1795197208531,
+  "publishedAtMs": 1795198760697,
   "bundle": {
-    "version": 23,
+    "version": 24,
     "minAppVersion": "8.0.0",
-    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-23.zip",
-    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-23.zip",
-    "sha256": "8b27145acc0e5538b43febffbd0635479026c6d331cc70f4eeeda7da26b257ee",
+    "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-24.zip",
+    "packagePath": "/Raph-73/Source-FR/main/bundles/Ney-Source-Bundle-24.zip",
+    "sha256": "f5bd337790f593f61cb0709f6cf340ad6eb44bf4742da3e77a6d488d7877c3e2",
     "signature": ""
   },
   "modules": [
@@ -139,6 +139,33 @@
           "dub"
         ],
         "iconUrl": "https://www.mugiwara-no-streaming.com/icone-512.png"
+      },
+      "signature": ""
+    },
+    {
+      "moduleId": "metaflix-v1",
+      "moduleFamilyId": "metaflix_v1",
+      "moduleIdentity": "SP-VID-9007-METAFLIX",
+      "moduleIdentityNumber": 9007,
+      "contentType": "video",
+      "version": "1.0.0-beta.1",
+      "minAppVersion": "8.0.0",
+      "packageUrl": "https://raw.githubusercontent.com/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/Metaflix/dist/MetaFlix-1.0.0-beta.1.zip",
+      "packagePath": "/Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/Metaflix/dist/MetaFlix-1.0.0-beta.1.zip",
+      "sha256": "8de675676ebf3f094aa9dae7901b8210d8c8c0bb43a5d178121ecca3cd5a507c",
+      "publishedAtMs": 1795198760697,
+      "changelog": [
+        "1.0.0-beta.1: New MetaFlix module (metaflix.fr): French catalogue with search, details, seasons/episodes and discovery (a la une, top 10, tendances, nouveautes, mieux notes, populaires, genres). Playback mirrors the site's own choice between its signed zen-cdn MP4 (verified with a one-byte Range, site Referer) and its segmented HLS (/api/v/, French and English audio, source VTT subtitles); the MP4 stays the default unless the title is flagged heavy, mixed-audio or low quality for the season. Intro markers from the site are forwarded, lists are cached and HTTP 429 is reported with a retry message. Local checks passed on Better Call Saul, The Mentalist, Spider-Man: Brand New Day; One Piece resolves its fMP4 HLS but the kit probe cannot sample init maps, and device playback, language and downloads remain unverified."
+      ],
+      "presentation": {
+        "category": "Films & Series",
+        "purpose": "Catalogue francophone (VF)",
+        "recommended": false,
+        "language": "Francais (VF)",
+        "languages": [
+          "dub"
+        ],
+        "iconUrl": "https://metaflix.fr/apple-touch-icon.png"
       },
       "signature": ""
     }

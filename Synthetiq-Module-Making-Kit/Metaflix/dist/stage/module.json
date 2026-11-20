@@ -1,0 +1,43 @@
+{
+  "id": "metaflix-v1",
+  "name": "MetaFlix",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.1",
+  "version": "1.0.0-beta.1",
+  "moduleFamilyId": "metaflix_v1",
+  "moduleIdentity": "SP-VID-9007-METAFLIX",
+  "moduleIdentityNumber": 9007,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "description": "Catalogue public MetaFlix (metaflix.fr) : films, series et animés en VF, recherche par titre, fiches detaillees et saisons/episodes via l'API du site, et accueil sections (a la une, top 10, tendances, nouveautes, mieux notes, populaires, genres). Lecture : le lecteur MetaFlix remet un MP4 signe sur zen-cdn apres proxy ; il est verifie par une requete d'un octet et reste le flux par defaut quand le site le prefere. Un second flux HLS (/api/v/), avec pistes audio fr et en et sous-titres VTT du site, sert d'alternative et devient le defaut quand le MP4 est signale lourd, en qualite reduite ou en audio mixte. Le lecteur partenaire moviez n'est tente qu'en dernier recours. Les marqueurs d'intro du site sont transmis, les listes sont mises en cache et une limite HTTP 429 est signalee par un message de reprise.",
+  "presentation": {
+    "category": "Films & Series",
+    "purpose": "Catalogue francophone (VF)",
+    "recommended": false,
+    "language": "Francais (VF)",
+    "languages": [
+      "dub"
+    ],
+    "iconUrl": "https://metaflix.fr/apple-touch-icon.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true
+    },
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 6
+    },
+    "baseUrl": "https://metaflix.fr",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  }
+}
