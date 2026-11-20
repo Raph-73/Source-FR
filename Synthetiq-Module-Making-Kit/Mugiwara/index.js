@@ -362,6 +362,7 @@
     var deadline = now() + 20000;
     var page = await fetchText(siteUrl(ref.slug), HTML_HEADERS, 15000);
     if (page.status === 404) throw new Error('Mugiwara : cette fiche n\'existe pas.');
+    if (page.status === 200) rememberIds(ref.slug, page.text);
     var anime = page.status === 200 ? animeOfDetail(page.text) : null;
     if (!anime) throw new Error('Mugiwara : fiche illisible.');
 
@@ -539,6 +540,7 @@
     if (!ref) throw new Error('Mugiwara : identifiant invalide.');
     var page = await fetchText(siteUrl(ref.slug), HTML_HEADERS, 15000);
     if (page.status === 404) throw new Error('Mugiwara : cette fiche n\'existe pas.');
+    if (page.status === 200) rememberIds(ref.slug, page.text);
     var anime = page.status === 200 ? animeOfDetail(page.text) : null;
     if (!anime) throw new Error('Mugiwara : fiche illisible.');
 
@@ -847,7 +849,9 @@
    * entry reached through the SEQUEL chain. A mapping is used only when a
    * season boundary matches exactly. AniSkip times the original TV cut, so a
    * re-cut French dub can sit a few seconds off; both languages still get the
-   * markers, and every failure is silent: playback never depends on them. */
+   * markers, and every failure is silent: playback never depends on them. The
+   * whole lookup runs on a short budget after the season page, because an
+   * external API that is slow must not hold the player back. */
   var ANISKIP = 'https://api.aniskip.com/v2/skip-times/';
   var ANILIST = 'https://graphql.anilist.co';
   var SKIP_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json' };
@@ -858,16 +862,28 @@
   var CHAIN_HOPS = 5;
   var idsCache = {}, mediaCache = {}, chainCache = {}, skipCache = {};
 
+  function malFrom(html) {
+    var m = String(html || '').match(/myanimelist\.net\/anime\/(\d+)/);
+    return m ? num(m[1]) : 0;
+  }
+
+  /* The fiche and the episode list already read the title page, so the MAL id
+   * is cached there for free and playback does not fetch that page again. */
+  function rememberIds(slug, html) {
+    var hit = idsCache[slug];
+    if (hit && now() - hit.at < IDS_TTL) return;
+    idsCache[slug] = { ids: { mal: malFrom(html) }, at: now() };
+  }
+
   async function titleIds(slug, deadline) {
     var hit = idsCache[slug];
     if (hit && now() - hit.at < IDS_TTL) return hit.ids;
     var ids = { mal: 0 }, answered = false;
     try {
-      var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 10000));
+      var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 1000));
       if (page.status === 200) {
         answered = true;
-        var m = String(page.text).match(/myanimelist\.net\/anime\/(\d+)/);
-        ids.mal = m ? num(m[1]) : 0;
+        ids.mal = malFrom(page.text);
       }
     } catch (_) { /* ids stay unknown */ }
     if (answered) idsCache[slug] = { ids: ids, at: now() };
@@ -884,7 +900,7 @@
     if (hit && now() - hit.at < CHAIN_TTL) return hit.media;
     try {
       var body = JSON.stringify({ query: MEDIA_QUERY, variables: { id: Number(malId) } });
-      var r = await fetchJson(ANILIST, GRAPH_HEADERS, 'POST', body, left(deadline, 6000));
+      var r = await fetchJson(ANILIST, GRAPH_HEADERS, 'POST', body, left(deadline, 700));
       if (r.status === 200) {
         var media = r.data && r.data.data ? r.data.data.Media : null;
         mediaCache[key] = { media: media, at: now() };
@@ -1024,7 +1040,7 @@
     var markers = null, answered = false;
     try {
       var r = await fetchJson(ANISKIP + enc(malId) + '/' + enc(episode) +
-        '?types%5B%5D=op&types%5B%5D=ed&episodeLength=0', SKIP_HEADERS, 'GET', null, left(deadline, 6000));
+        '?types%5B%5D=op&types%5B%5D=ed&episodeLength=0', SKIP_HEADERS, 'GET', null, left(deadline, 700));
       if (r.status === 200) {
         answered = true;
         var list = r.data && r.data.found && Array.isArray(r.data.results) ? r.data.results : [];
@@ -1041,26 +1057,31 @@
     return markers;
   }
 
-  /* Title ids and the base MAL entry are requested while the season page is in
-   * flight; the AniSkip query only needs the season list for the mapping. */
+  /* Title ids are requested alongside the reader probes. The AniList chain only
+   * matters past season 1, so it is requested lazily on that path. */
   function markerPlan(slug, deadline) {
     var ids = titleIds(slug, deadline);
     return {
       ids: ids,
-      chain: ids
-        .then(function (found) { return found.mal ? sequelChain(found.mal, 1, deadline) : []; })
-        .catch(function () { return []; })
+      chain: function (want, d) {
+        return ids
+          .then(function (found) { return found.mal ? sequelChain(found.mal, want, d) : []; })
+          .catch(function () { return []; });
+      }
     };
   }
 
   async function markersFor(plan, seasonId, episode, seasons, deadline) {
     var ids = await plan.ids;
     if (!ids.mal || now() > deadline) return null;
-    var base = await plan.chain;
-    if (!base.length || now() > deadline) return null;
     var ordered = orderedSeasons(seasons);
     var index = seasonIndex(ordered, seasonId);
     if (index < 0) return null;
+    /* Season 1 is the MAL entry linked on the title page; AniSkip rejects an
+     * episode it does not know, so no AniList round-trip is needed to try. */
+    if (index === 0) return skipMarkers(ids.mal, episode, deadline);
+    var base = await plan.chain(index + 1, deadline);
+    if (!base.length || now() > deadline) return null;
     var mapped = await mappedEpisode(ids, ordered, index, episode, base[0], deadline);
     if (!mapped || now() > deadline) return null;
     return skipMarkers(mapped.mal, mapped.episode, deadline);
@@ -1076,11 +1097,7 @@
 
     var seasonId = ref.season || '1';
     var episode = Number(ref.episode) > 0 ? Number(ref.episode) : 1;
-    var markerDeadline = now() + 9000;
-
-    /* Skip markers are independent of the stream, so the title page lookup
-     * runs alongside the season page and never delays the reader probes. */
-    var plan = markerPlan(ref.slug, markerDeadline);
+    var markerDeadline = now() + 2200;
 
     var page = await fetchText(siteUrl(ref.slug) + '/episodes/saison' + enc(seasonId), HTML_HEADERS, left(deadline, 13000));
     if (page.status === 404) return streamFail('Mugiwara : cette saison n\'existe pas.', tag);
@@ -1095,8 +1112,11 @@
     }
     if (!season) return streamFail('Mugiwara : aucun lecteur pour cette saison.', tag);
 
-    var markerTask = (plan ? markersFor(plan, seasonId, episode, seasons, markerDeadline) : Promise.resolve(null))
-      .catch(function () { return null; });
+    /* Markers are optional and start after the season page, so the players keep
+     * the request slots; the result is taken once the stream is resolved. */
+    var markerTask = (now() < markerDeadline
+      ? markersFor(markerPlan(ref.slug, markerDeadline), seasonId, episode, seasons, markerDeadline)
+      : Promise.resolve(null)).catch(function () { return null; });
 
     /* Serve the language that was asked for; never silently substitute the
      * other audio track (a VF request must not come back as VOSTFR). */
@@ -1232,6 +1252,7 @@
       try {
         var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 4000));
         if (page.status !== 200) return null;
+        rememberIds(slug, page.text);
         var anime = animeOfDetail(page.text);
         if (!anime) return null;
         var art = await bestArtPath(slug, anime.options, deadline);
@@ -1316,7 +1337,10 @@
       if (!anime) {
         try {
           var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 4500));
-          if (page.status === 200) anime = animeOfDetail(page.text);
+          if (page.status === 200) {
+            rememberIds(slug, page.text);
+            anime = animeOfDetail(page.text);
+          }
         } catch (_) { anime = null; }
       }
       return heroCardFrom(slug, it, anime);
