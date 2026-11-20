@@ -122,7 +122,7 @@
       if (fi) film.filmIndex = Number(fi[1]);
       return film;
     }
-    m = raw.match(/\/catalogue\/([a-z0-9][a-z0-9._-]*)(?:\/episodes\/saison([a-z0-9]+))?/i);
+    m = raw.match(/\/catalogue\/([a-z0-9][a-z0-9._-]*)(?:\/episodes\/saison([a-z0-9]+(?:-[a-z0-9]+)*))?/i);
     if (m) {
       var ref = { slug: m[1].toLowerCase() };
       if (m[2]) {
@@ -131,7 +131,7 @@
       }
       return ref;
     }
-    m = raw.match(/^mugiwara:([a-z0-9][a-z0-9._-]*)(?::s?([a-z0-9]+)[:e](\d+))?$/i);
+    m = raw.match(/^mugiwara:([a-z0-9][a-z0-9._-]*)(?::s?([a-z0-9]+(?:-[a-z0-9]+)*):e?(\d+))?$/i);
     if (m) {
       var alt = { slug: m[1].toLowerCase() };
       if (m[2]) { alt.season = m[2].toLowerCase(); alt.episode = Number(m[3]) || 1; }
@@ -839,6 +839,234 @@
     return { streams: [], subtitles: [], lang: tag === 'dub' ? 'dub' : 'sub', provider: 'Mugiwara', error: { message: message } };
   }
 
+  /* -------------------------------------------------------- intro / outro */
+  /* AniSkip publishes skip intervals keyed by MyAnimeList episode. The title
+   * page links that id (season pages do not). AniList then gives the released
+   * episode counts needed to place a site season on the MAL numbering: either
+   * the site splits one MAL entry into arcs, or each TV season is its own MAL
+   * entry reached through the SEQUEL chain. A mapping is used only when a
+   * season boundary matches exactly. AniSkip describes the original TV cut,
+   * which is what the VOSTFR streams carry; a French dub can be re-cut and the
+   * app auto-seeks on these ranges, so VF streams get no markers. Every
+   * failure is silent: playback never depends on them. */
+  var ANISKIP = 'https://api.aniskip.com/v2/skip-times/';
+  var ANILIST = 'https://graphql.anilist.co';
+  var SKIP_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json' };
+  var GRAPH_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json', 'Content-Type': 'application/json' };
+  var IDS_TTL = 7 * 24 * 60 * 60 * 1000;
+  var CHAIN_TTL = 6 * 60 * 60 * 1000;
+  var SKIP_TTL = 6 * 60 * 60 * 1000;
+  var CHAIN_HOPS = 5;
+  var idsCache = {}, mediaCache = {}, chainCache = {}, skipCache = {};
+
+  async function titleIds(slug, deadline) {
+    var hit = idsCache[slug];
+    if (hit && now() - hit.at < IDS_TTL) return hit.ids;
+    var ids = { mal: 0 }, answered = false;
+    try {
+      var page = await fetchText(siteUrl(slug), HTML_HEADERS, left(deadline, 10000));
+      if (page.status === 200) {
+        answered = true;
+        var m = String(page.text).match(/myanimelist\.net\/anime\/(\d+)/);
+        ids.mal = m ? num(m[1]) : 0;
+      }
+    } catch (_) { /* ids stay unknown */ }
+    if (answered) idsCache[slug] = { ids: ids, at: now() };
+    return ids;
+  }
+
+  var MEDIA_QUERY = 'query($id:Int){Media(idMal:$id,type:ANIME){idMal episodes ' +
+    'nextAiringEpisode{episode} relations{edges{relationType node{idMal format episodes ' +
+    'nextAiringEpisode{episode}}}}}}';
+
+  async function fetchMedia(malId, deadline) {
+    var key = String(malId);
+    var hit = mediaCache[key];
+    if (hit && now() - hit.at < CHAIN_TTL) return hit.media;
+    try {
+      var body = JSON.stringify({ query: MEDIA_QUERY, variables: { id: Number(malId) } });
+      var r = await fetchJson(ANILIST, GRAPH_HEADERS, 'POST', body, left(deadline, 6000));
+      if (r.status === 200) {
+        var media = r.data && r.data.data ? r.data.data.Media : null;
+        mediaCache[key] = { media: media, at: now() };
+        return media;
+      }
+    } catch (_) { /* unknown */ }
+    return null;
+  }
+
+  /* One node per MAL entry, with the episodes already released (an airing
+   * entry publishes a planned total it has not reached yet). */
+  function chainNode(media, fallbackMal) {
+    var released;
+    if (media && media.nextAiringEpisode) released = Math.max(0, num(media.nextAiringEpisode.episode) - 1);
+    else released = num(media && media.episodes);
+    return {
+      mal: num(media && media.idMal) || num(fallbackMal),
+      released: released
+    };
+  }
+
+  /* The next television sequel of an entry. Several TV sequels make the chain
+   * ambiguous, so the mapping is abandoned instead of guessing. */
+  function sequelOf(media) {
+    var edges = media && media.relations && Array.isArray(media.relations.edges) ? media.relations.edges : [];
+    var found = null;
+    for (var i = 0; i < edges.length; i++) {
+      var edge = edges[i] || {};
+      if (edge.relationType !== 'SEQUEL') continue;
+      var node = edge.node || {};
+      var format = String(node.format || '');
+      if (!num(node.idMal) || (format !== 'TV' && format !== 'ONA')) continue;
+      if (found) return null;
+      found = node;
+    }
+    return found;
+  }
+
+  /* baseMal is chain[0]; each hop is one AniList request, cached per base id. */
+  async function sequelChain(baseMal, want, deadline) {
+    var key = String(baseMal);
+    var framed = Math.min(want, CHAIN_HOPS);
+    var hit = chainCache[key];
+    var nodes = [], done = false;
+    if (hit && now() - hit.at < CHAIN_TTL) {
+      if (hit.nodes.length >= framed || hit.done) return hit.nodes;
+      nodes = hit.nodes.slice();
+      done = hit.done;
+    }
+    while (!done && nodes.length < framed && now() <= deadline) {
+      var lastMal = nodes.length ? nodes[nodes.length - 1].mal : baseMal;
+      var media = await fetchMedia(lastMal, deadline);
+      if (!media) break;
+      if (!nodes.length) nodes.push(chainNode(media, baseMal));
+      var next = sequelOf(media);
+      if (!next) { done = true; break; }
+      var node = chainNode(next);
+      var loop = false, i;
+      for (i = 0; i < nodes.length; i++) if (nodes[i].mal === node.mal) loop = true;
+      if (!node.mal || loop) { done = true; break; }
+      nodes.push(node);
+    }
+    if (nodes.length && (done || nodes.length >= framed)) {
+      chainCache[key] = { nodes: nodes.slice(), at: now(), done: done };
+    }
+    return nodes;
+  }
+
+  /* Numeric seasons in continuity order ("2-4" is the fourth cour of season 2);
+   * side rows (hs, oav) carry no rank and do not move MAL numbering. */
+  function orderedSeasons(seasons) {
+    var out = [], i;
+    for (i = 0; i < (seasons || []).length; i++) {
+      var rank = seasonRank(seasons[i] && seasons[i].id);
+      if (rank) out.push({ rank: rank, count: seasonEpisodeCount(seasons[i]) });
+    }
+    out.sort(function (a, b) {
+      if (a.rank[0] !== b.rank[0]) return a.rank[0] - b.rank[0];
+      return a.rank[1] - b.rank[1];
+    });
+    return out;
+  }
+
+  function seasonIndex(ordered, seasonId) {
+    var rank = seasonRank(seasonId);
+    if (!rank) return -1;
+    for (var i = 0; i < ordered.length; i++) {
+      if (ordered[i].rank[0] === rank[0] && ordered[i].rank[1] === rank[1]) return i;
+    }
+    return -1;
+  }
+
+  /* A season starting exactly on a sequel's first episode is that sequel's
+   * continuity; otherwise an arc-split entry keeps the same MAL numbering. Any
+   * unknown preceding count, or an episode past the released total, means the
+   * episode cannot be placed and gets no markers. */
+  async function mappedEpisode(ids, ordered, index, episode, base, deadline) {
+    var offset = 0, i;
+    for (i = 0; i < index; i++) {
+      if (!ordered[i].count) return null;
+      offset += ordered[i].count;
+    }
+
+    if (offset > 0) {
+      var nodes = await sequelChain(ids.mal, index + 1, deadline);
+      var start = 0;
+      for (i = 0; i < nodes.length; i++) {
+        if (start === offset) {
+          if (!nodes[i].released || episode > nodes[i].released) return null;
+          return { mal: nodes[i].mal, episode: episode };
+        }
+        start += nodes[i].released;
+        if (start > offset) break;
+      }
+    }
+
+    var absolute = offset + episode;
+    if (base.released > 0) {
+      if (absolute <= base.released) return { mal: base.mal || ids.mal, episode: absolute };
+    } else if (absolute === episode) {
+      return { mal: base.mal || ids.mal, episode: absolute };
+    }
+    return null;
+  }
+
+  function rangeOf(interval) {
+    if (!interval || typeof interval !== 'object') return null;
+    var start = num(interval.startTime), end = num(interval.endTime);
+    if (!(end > start) || start < 0) return null;
+    return { start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 };
+  }
+
+  async function skipMarkers(malId, episode, deadline) {
+    var key = String(malId) + ':' + episode;
+    var hit = skipCache[key];
+    if (hit && now() - hit.at < SKIP_TTL) return hit.markers;
+    var markers = null, answered = false;
+    try {
+      var r = await fetchJson(ANISKIP + enc(malId) + '/' + enc(episode) +
+        '?types%5B%5D=op&types%5B%5D=ed&episodeLength=0', SKIP_HEADERS, 'GET', null, left(deadline, 6000));
+      if (r.status === 200) {
+        answered = true;
+        var list = r.data && r.data.found && Array.isArray(r.data.results) ? r.data.results : [];
+        var intro = null, outro = null, i;
+        for (i = 0; i < list.length; i++) {
+          var entry = list[i] || {};
+          if (entry.skipType === 'op' && !intro) intro = rangeOf(entry.interval);
+          else if (entry.skipType === 'ed' && !outro) outro = rangeOf(entry.interval);
+        }
+        if (intro || outro) markers = { intro: intro, outro: outro };
+      }
+    } catch (_) { /* markers stay optional */ }
+    if (answered) skipCache[key] = { markers: markers, at: now() };
+    return markers;
+  }
+
+  /* Title ids and the base MAL entry are requested while the season page is in
+   * flight; the AniSkip query only needs the season list for the mapping. */
+  function markerPlan(slug, deadline) {
+    var ids = titleIds(slug, deadline);
+    return {
+      ids: ids,
+      chain: ids
+        .then(function (found) { return found.mal ? sequelChain(found.mal, 1, deadline) : []; })
+        .catch(function () { return []; })
+    };
+  }
+
+  async function markersFor(plan, seasonId, episode, seasons, deadline) {
+    var ids = await plan.ids;
+    if (!ids.mal || now() > deadline) return null;
+    var base = await plan.chain;
+    if (!base.length || now() > deadline) return null;
+    var ordered = orderedSeasons(seasons);
+    var index = seasonIndex(ordered, seasonId);
+    if (index < 0) return null;
+    var mapped = await mappedEpisode(ids, ordered, index, episode, base[0], deadline);
+    if (!mapped || now() > deadline) return null;
+    return skipMarkers(mapped.mal, mapped.episode, deadline);
+  }
+
   async function extractStreamUrl(episodeHref, lang) {
     var ref = parseRef(episodeHref);
     if (!ref) return streamFail('Mugiwara : identifiant invalide.');
@@ -849,6 +1077,11 @@
 
     var seasonId = ref.season || '1';
     var episode = Number(ref.episode) > 0 ? Number(ref.episode) : 1;
+    var markerDeadline = now() + 9000;
+
+    /* Skip markers are independent of the stream, so the title page lookup
+     * runs alongside the season page and never delays the reader probes. */
+    var plan = tag === 'sub' ? markerPlan(ref.slug, markerDeadline) : null;
 
     var page = await fetchText(siteUrl(ref.slug) + '/episodes/saison' + enc(seasonId), HTML_HEADERS, left(deadline, 13000));
     if (page.status === 404) return streamFail('Mugiwara : cette saison n\'existe pas.', tag);
@@ -862,6 +1095,9 @@
       if (seasons[i] && String(seasons[i].id) === String(seasonId)) { season = seasons[i]; break; }
     }
     if (!season) return streamFail('Mugiwara : aucun lecteur pour cette saison.', tag);
+
+    var markerTask = (plan ? markersFor(plan, seasonId, episode, seasons, markerDeadline) : Promise.resolve(null))
+      .catch(function () { return null; });
 
     /* Serve the language that was asked for; never silently substitute the
      * other audio track (a VF request must not come back as VOSTFR). */
@@ -891,7 +1127,8 @@
       return streamFail('Mugiwara : aucun lecteur ' + name + ' n\'a fourni de flux pour cet episode.', tag);
     }
 
-    return {
+    var markers = await markerTask;
+    var result = {
       url: primary.url,
       headers: STREAM_HEADERS,
       streamType: 'hls',
@@ -904,6 +1141,9 @@
       lang: primary.lang,
       provider: 'Mugiwara'
     };
+    if (markers && markers.intro) result.intro = markers.intro;
+    if (markers && markers.outro) result.outro = markers.outro;
+    return result;
   }
 
   /* -------------------------------------------------------------- discovery */
