@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 24,
-  "bundleFile": "bundles/Ney-Source-Bundle-24.zip",
+  "bundleVersion": 25,
+  "bundleFile": "bundles/Ney-Source-Bundle-25.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -93,7 +93,7 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/Metaflix/dist/MetaFlix-1.0.0-beta.1.zip",
+      "file": "Synthetiq-Module-Making-Kit/Metaflix/dist/MetaFlix-1.0.0-beta.2.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone (VF)",
@@ -105,6 +105,7 @@
         "iconUrl": "https://metaflix.fr/apple-touch-icon.png"
       },
       "changelog": [
+        "1.0.0-beta.2: Fixed the interface lag felt while browsing the module. The request pacing used a microtask wait loop, which starved the app event loop for up to ~650 ms during title, episode and playback loads (measured). Pacing is removed and bursts are bounded by the request graph instead (season pages two at a time, playback at most four requests); a measured burst of nine parallel calls answered without HTTP 429. Cold handler times dropped from 1.2 s to 0.3 s for playback and from 1.3 s to under 0.1 s for a six-season list. Playback, sources and captions are unchanged.",
         "1.0.0-beta.1: New MetaFlix module (metaflix.fr): French catalogue with search, details, seasons/episodes and discovery (a la une, top 10, tendances, nouveautes, mieux notes, populaires, genres). Playback mirrors the site's own choice between its signed zen-cdn MP4 (verified with a one-byte Range, site Referer) and its segmented HLS (/api/v/, French and English audio, source VTT subtitles); the MP4 stays the default unless the title is flagged heavy, mixed-audio or low quality for the season. Intro markers from the site are forwarded, lists are cached and HTTP 429 is reported with a retry message. Local checks passed on Better Call Saul, The Mentalist, Spider-Man: Brand New Day; One Piece resolves its fMP4 HLS but the kit probe cannot sample init maps, and device playback, language and downloads remain unverified."
       ]
     }
@@ -305,6 +306,13 @@
       "version": "1.0.0-beta.3",
       "sha256": "d059630242c9b479a935a1cd75146f7693ce22f5c8717e1df6cc0b90601ca53c",
       "retiredAtMs": 1795197208531
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Metaflix/dist/MetaFlix-1.0.0-beta.1.zip",
+      "moduleId": "metaflix-v1",
+      "version": "1.0.0-beta.1",
+      "sha256": "8de675676ebf3f094aa9dae7901b8210d8c8c0bb43a5d178121ecca3cd5a507c",
+      "retiredAtMs": 1795202566529
     }
   ]
 }

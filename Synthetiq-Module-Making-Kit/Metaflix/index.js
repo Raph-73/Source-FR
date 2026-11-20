@@ -106,43 +106,18 @@
 
   /* ------------------------------------------------- rate limit and caching */
   /* The site answers HTTP 429 under bursts and asks the browser for a Turnstile
-   * token, which a module cannot and must not produce. Requests are therefore
-   * spaced out and a 429 becomes an explicit retry message. The site also
-   * caches its own responses; the module keeps lists for a few minutes so a
-   * second screen does not re-request the same page. */
-  var SITE_GAP = 220;
-  var siteGap = SITE_GAP;
-  var siteGate = Promise.resolve();
-  var siteLastAt = 0;
+   * token, which a module cannot and must not produce. The runtime has no timer,
+   * and a microtask "sleep" would starve the app's event loop for as long as it
+   * runs (measured 400-650 ms stalls), so requests are never delayed here.
+   * Bursts are bounded by the request graph instead: list pages run two at a
+   * time, playback starts at most four requests, and a 429 becomes an explicit
+   * retry message. The site also caches its own responses; the module keeps
+   * lists for a few minutes so a second screen does not re-request the page. */
   var siteLimitedUntil = 0;
-
-  /* No setTimeout in the app runtime: a short wait is a microtask spin. Used
-   * only between requests, never while a request is in flight. */
-  function pause(ms) {
-    var end = now() + ms;
-    return new Promise(function (resolve) {
-      function tick() {
-        if (now() >= end) resolve();
-        else Promise.resolve().then(tick);
-      }
-      tick();
-    });
-  }
-
-  function pace() {
-    var slot = siteGate.then(async function () {
-      var wait = siteLastAt + siteGap - now();
-      if (wait > 0) await pause(Math.min(wait, 400));
-      siteLastAt = now();
-    });
-    siteGate = slot.catch(function () { });
-    return slot;
-  }
 
   function isLimited() { return now() < siteLimitedUntil; }
   function markLimited() {
     siteLimitedUntil = now() + 45000;
-    siteGap = Math.min(1200, Math.round(siteGap * 2));
   }
   function limitedError() {
     var err = new Error(LIMITED_MESSAGE);
@@ -160,7 +135,6 @@
 
   /* -------------------------------------------------------------- transport */
   async function fetchJson(url, headers, timeoutMs, method, body) {
-    await pace();
     var res = await fetchv2(url, headers || {}, method || 'GET', body == null ? null : body, { timeoutMs: timeoutMs });
     var status = num(res && (res.status || res.statusCode));
     if (status === 429) markLimited();
@@ -177,7 +151,6 @@
   }
 
   async function fetchText(url, headers, timeoutMs) {
-    await pace();
     var res = await fetchv2(url, headers || {}, 'GET', null, { timeoutMs: timeoutMs });
     var status = num(res && (res.status || res.statusCode));
     if (status === 429) markLimited();
