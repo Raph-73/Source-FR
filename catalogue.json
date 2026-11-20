@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 20,
-  "bundleFile": "bundles/Ney-Source-Bundle-20.zip",
+  "bundleVersion": 21,
+  "bundleFile": "bundles/Ney-Source-Bundle-21.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -72,7 +72,7 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/Miaw/dist/Miaw-1.0.0-beta.1.zip",
+      "file": "Synthetiq-Module-Making-Kit/Miaw/dist/Miaw-1.0.0-beta.2.zip",
       "presentation": {
         "category": "Films & Series",
         "purpose": "Catalogue francophone (VF / VOSTFR)",
@@ -85,6 +85,7 @@
         "iconUrl": "https://miaw.tv/brand/app/icon-512.png"
       },
       "changelog": [
+        "1.0.0-beta.2: Les series affichent de nouveau tous leurs episodes et la lecture ne reste plus sur « request video link ». Deux causes corrigees : (1) le site limite les requetes (HTTP 429) et le module transformait cette reponse en liste vide ou tronquee ; les requetes au site sont desormais espacees (400 ms, elargies apres un 429), les fiches, listes d'episodes et pages catalogue sont mises en cache, et un 429 affiche un message explicite au lieu de cacher des episodes. (2) Le CDN Vidzy renvoyait une playlist leurre auto-referente au fingerprint Chrome, et le HLS du lecteur miaw2 etait renvoye vers une playlist promo quand un Referer miaw.tv l'accompagnait ; toutes les requetes Vidzy utilisent maintenant le fingerprint Firefox, le Referer est retire des en-tetes par defaut du manifeste, et le MP4 blink (qui joue sous n'importe quel client) est ouvert par defaut. Verifie en local : Les Simpson 808 episodes sur 38 saisons, Les Griffin 456, Esprits criminels 364, Bob l'eponge 339, Bleach 392, 12 fiches completes, et les routes MP4/HLS echantillonnees (signature iso-media / mpeg-ts) ; lecture reelle dans l'application non verifiee.",
         "1.0.0-beta.1: Nouveau module Miaw (miaw.tv) : catalogue francophone en VF avec recherche, fiches detaillees (titre, synopsis, genres, annee, affiche portrait, duree ou nombre de saisons et d'episodes), listes de saisons et episodes et decouverte (a la une, films et series les mieux notes, derniers ajouts). La lecture interroge l'API watch du site puis resout ses lecteurs en parallele : le lecteur principal (blink) remet un MP4 signe sur son CDN apres deux redirections, moviez un HLS adaptatif (1080p/720p/360p mesures sur L'Odyssee) et Vidzy un HLS avec une variante VOSTFR. Chaque entree du selecteur porte le nom du lecteur et sa qualite mesuree, la plus haute etant ouverte par defaut ; le lecteur principal du site garde la premiere place car son fichier ne declare pas de resolution. Chaque flux porte les en-tetes attendus par son hote, et un lecteur indisponible n'empeche pas les autres de jouer. Les 416 episodes de Bleach sont listes sur 2 saisons, les pages catalogue sont paginees par 40 titres. Verifie en local : recherche, fiche film et serie, listes d'episodes, decouverte et deux routes video echantillonnees ; lecture reelle dans l'application non verifiee."
       ]
     },

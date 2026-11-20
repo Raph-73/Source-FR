@@ -5,12 +5,12 @@
  * in fr-FR; posters and stills come from the same TMDB image host the site uses.
  * Playback: the watch API lists the site's own players. "blink" hands out a
  * signed MP4 on zen-cdn, reached through two redirects; moviez answers an HLS
- * master (1080p/720p/360p) and vidzy an HLS master with a VOSTFR variant. The
- * readers run in parallel and every checked rendition is offered with its
- * player name and quality; measured heights rank highest first and blink, the
- * player the site opens by default, keeps the top slot. Each rendition carries
- * the exact headers its host expects, and the response-level headers are the
- * one set all of them accept.
+ * master (1080p/720p/360p); the site's own miaw2 player and vidzy answer HLS
+ * masters with French and English audio plus a VOSTFR variant. The readers run
+ * in parallel and every checked rendition is offered with its player name and
+ * quality, highest first. Each rendition carries the exact headers its host
+ * expects; blink, which plays under any client fingerprint and is the player
+ * the site opens by default, keeps the top slot.
  * Metadata: the fiche's JSON-LD block carries title, overview, genres, year,
  * poster and season/episode counts.
  * Discovery: the catalogue pages (/movies, /series with sort=rating|recent)
@@ -32,15 +32,24 @@
 
   var JSON_HEADERS = { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'fr-FR,fr;q=0.9' };
   var HTML_HEADERS = { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'fr-FR,fr;q=0.9' };
-  /* One set for every rendition returned by the picker: the zen-cdn MP4 rejects
-   * a foreign Referer and Vidzy rejects a non-Firefox User-Agent, so the common
-   * denominator is the Firefox fingerprint with no Referer at all. */
-  var STREAM_HEADERS = { 'User-Agent': VIDZY_UA, 'Accept': '*/*', 'Accept-Encoding': 'identity' };
+  /* zen-cdn rejects a foreign Referer, uqload and Vidzy accept a plain
+   * fingerprint, so the result-level set stays referer-free. Each quality still
+   * carries the exact headers its own host expects. */
+  var STREAM_HEADERS = { 'User-Agent': UA, 'Accept': '*/*', 'Accept-Encoding': 'identity' };
   /* The blink token endpoint answers a Telegram promo instead of the file when
    * the site Referer is missing, so the redirect chain keeps it. */
   var BLINK_HEADERS = { 'User-Agent': UA, 'Referer': SITE + '/' };
+  /* /api/uqload/hd/<id>.m3u8 answers a 302 to the signed strm*.uqload.vc master,
+   * which is served to a plain User-Agent (no Referer). */
+  var UQLOAD_HEADERS = { 'User-Agent': UA, 'Accept': '*/*', 'Accept-Encoding': 'identity' };
   var MOVIEZ_STREAM_HEADERS = { 'User-Agent': UA, 'Referer': MOVIEZ + '/' };
-  var VIDZY_STREAM_HEADERS = merge(STREAM_HEADERS, { 'Referer': VIDZY + '/', 'Origin': 'https://vidzy.cc' });
+  /* The real master is only served to the Firefox fingerprint: a Chrome UA gets
+   * a decoy playlist whose single variant loops back to itself, and a br/zstd
+   * request gets a gzip body. Every Vidzy CDN request uses this set. */
+  var VIDZY_STREAM_HEADERS = {
+    'User-Agent': VIDZY_UA, 'Accept': '*/*', 'Accept-Encoding': 'identity',
+    'Referer': VIDZY + '/', 'Origin': 'https://vidzy.cc'
+  };
 
   var FEEDS = {
     movies_rating: { path: '/movies?sort=rating&page=', kind: 'movie' },
@@ -59,6 +68,70 @@
     return out;
   }
   function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+
+  /* ------------------------------------------------- rate limit and caching */
+  /* The site answers `{"error":{"code":"rate_limited"}}` with HTTP 429 after a
+   * burst (measured: ~200 requests in under a minute trip it; 70 requests at
+   * ~6/s did not) and stays limited for tens of seconds. Requests to miaw.tv are
+   * therefore spaced out, and a 429 both stops the current handler and widens
+   * the gap so the following pages do not keep hammering a limited site. */
+  var SITE_GAP_MIN = 400;
+  var SITE_GAP_MAX = 1500;
+  var siteGap = SITE_GAP_MIN;
+  var siteGate = Promise.resolve();
+  var siteLastAt = 0;
+  var siteLimitedUntil = 0;
+
+  function allowed(url) {
+    return /^https?:\/\/(?:[a-z0-9-]+\.)?miaw\.tv(?:\/|$)/i.test(String(url || ''));
+  }
+
+  /* Measured against the real app runtime: no setTimeout, so a short wait is a
+   * microtask spin. Used only between requests (nothing in flight) and behind a
+   * 429, never in a hot loop. */
+  function pause(ms) {
+    var end = now() + ms;
+    return new Promise(function (resolve) {
+      function tick() {
+        if (now() >= end) resolve();
+        else Promise.resolve().then(tick);
+      }
+      tick();
+    });
+  }
+
+  function pace(url) {
+    if (!allowed(url)) return Promise.resolve();
+    /* The gap is read after the previous slot finishes, so a 429 that widens
+     * siteGap also slows the requests already queued behind it. */
+    var slot = siteGate.then(async function () {
+      var wait = siteLastAt + siteGap - now();
+      if (wait > 0) await pause(Math.min(wait, 900));
+      siteLastAt = now();
+    });
+    siteGate = slot.catch(function () { });
+    return slot;
+  }
+
+  function isLimited() { return now() < siteLimitedUntil; }
+  function markLimited() {
+    siteLimitedUntil = now() + 45000;
+    siteGap = Math.min(SITE_GAP_MAX, Math.round(siteGap * 1.8));
+  }
+
+  var CACHE = {};
+  function cacheGet(key) {
+    var hit = CACHE[key];
+    if (hit && hit.exp > now()) return hit.value;
+    return null;
+  }
+  function cacheSet(key, value, ttl) { CACHE[key] = { value: value, exp: now() + ttl }; }
+
+  function limitedError() {
+    var err = new Error('MIAW : le site limite les requêtes (HTTP 429). Réessayez dans une minute.');
+    err.limited = true;
+    return err;
+  }
 
   function decodeEntities(s) {
     return String(s == null ? '' : s)
@@ -126,8 +199,10 @@
 
   /* -------------------------------------------------------------- transport */
   async function fetchJson(url, headers, timeoutMs, method, body) {
+    await pace(url);
     var res = await fetchv2(url, headers || {}, method || 'GET', body == null ? null : body, { timeoutMs: timeoutMs });
     var status = num(res && (res.status || res.statusCode));
+    if (status === 429) markLimited();
     var data = null;
     if (res && typeof res.json === 'function') {
       try { data = await res.json(); } catch (_) { data = null; }
@@ -141,8 +216,10 @@
   }
 
   async function fetchText(url, headers, timeoutMs) {
+    await pace(url);
     var res = await fetchv2(url, headers || {}, 'GET', null, { timeoutMs: timeoutMs });
     var status = num(res && (res.status || res.statusCode));
+    if (status === 429) markLimited();
     var text = '';
     if (res && typeof res.text === 'function') text = await res.text();
     else if (res && typeof res.body === 'string') text = res.body;
@@ -190,13 +267,20 @@
   async function searchResults(query) {
     var term = String(query == null ? '' : query).trim();
     if (!term) return [];
+    var key = 'search:' + term.toLowerCase();
+    var cached = cacheGet(key);
+    if (cached) return cached;
+    if (isLimited()) throw limitedError();
     var deadline = now() + 12000;
     var r = await searchApi(term, deadline);
     var titles = r.data && r.data.data && r.data.data.titles;
+    if (r.status === 429) throw limitedError();
     if (r.status !== 200 || !Array.isArray(titles)) {
       throw new Error('MIAW search failed (HTTP ' + r.status + ')');
     }
-    return cardsFrom(titles, 24);
+    var cards = cardsFrom(titles, 24);
+    cacheSet(key, cards, 180000);
+    return cards;
   }
 
   /* ---------------------------------------------------------------- details */
@@ -243,12 +327,33 @@
     return out;
   }
 
+  /* Details and the episode list read the same fiche page, and the app opens
+   * them back to back. One cache entry keeps that to a single request. */
+  async function fichePage(ref, deadline) {
+    var pageUrl = SITE + (ref.type === 'tv' ? '/series/' : '/film/') + encodeURIComponent(ref.slug);
+    var key = 'fiche:' + pageUrl;
+    var hit = cacheGet(key);
+    if (hit) return hit;
+    if (isLimited()) throw limitedError();
+    var page = await fetchText(pageUrl, JSON_HEADERS, left(deadline, 10000));
+    if (page.status === 429) {
+      await pause(900);
+      page = await fetchText(pageUrl, JSON_HEADERS, left(deadline, 8000));
+      if (page.status === 429) throw limitedError();
+    }
+    if (page.status === 200 && page.text) cacheSet(key, page, 120000);
+    return page;
+  }
+
   async function extractDetails(urlOrId) {
     var ref = parseRef(urlOrId);
     if (!ref || !ref.slug) throw new Error('MIAW : identifiant invalide.');
+    var key = 'details:' + ref.type + ':' + ref.id + ':' + ref.slug;
+    var cached = cacheGet(key);
+    if (cached) return cached;
+
     var deadline = now() + 15000;
-    var pageUrl = SITE + (ref.type === 'tv' ? '/series/' : '/film/') + encodeURIComponent(ref.slug);
-    var page = await fetchText(pageUrl, JSON_HEADERS, left(deadline, 10000));
+    var page = await fichePage(ref, deadline);
     if (page.status === 404) throw new Error('MIAW : cette fiche n\'existe pas.');
     if (page.status !== 200 || !page.text) throw new Error('MIAW details failed (HTTP ' + page.status + ')');
 
@@ -259,17 +364,19 @@
       title = clean(og ? og[1].replace(/^miaw\.tv\s*-\s*/i, '') : '');
     }
     var poster = img(ld.image, 'w780');
-    if (!poster) return null;
+    if (!poster) {
+      var ogImg = page.text.match(/<meta property="og:image" content="([^"]*)"/i);
+      poster = img(ogImg ? ogImg[1] : '', 'w780');
+    }
 
     var out = {
       id: hrefOf(ref, ref.slug), href: hrefOf(ref, ref.slug), url: SITE,
       type: 'video',
       title: title,
       description: clean(ld.description || ''),
-      image: poster,
-      poster: poster,
       genres: genresOf(ld)
     };
+    if (poster) { out.image = poster; out.poster = poster; }
     var year = yearOf(ld.datePublished || ld.startDate);
     if (year) out.year = year;
 
@@ -282,6 +389,7 @@
       var minutes = isoMinutes(ld.duration);
       if (minutes) out.duration = minutes;
     }
+    cacheSet(key, out, 120000);
     return out;
   }
 
@@ -347,14 +455,22 @@
   }
 
   /* The API pages 25 episodes from page 0 and repeats the last page forever
-   * once the season is exhausted, so a page that adds nothing new ends the walk. */
+   * once the season is exhausted, so a page that adds nothing new ends the walk.
+   * Pages are read one at a time: bursted reads trip the site's rate limit and
+   * a 429 is reported instead of being flattened into "no episodes". */
   async function seasonEpisodes(seriesId, season, deadline) {
+    var key = 'season:' + seriesId + ':' + season;
+    var cached = cacheGet(key);
+    if (cached) return cached;
+    if (isLimited()) throw limitedError();
+
     var out = [], seen = {}, page;
     for (page = 0; page <= 23; page++) {
       if (now() >= deadline) break;
       var r = await fetchJson(SITE + '/api/series/' + encodeURIComponent(seriesId) +
         '/seasons/' + season + '?page=' + page,
         merge(JSON_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 9000));
+      if (r.status === 429) { markLimited(); throw limitedError(); }
       var list = r.data && r.data.data && r.data.data.episodes;
       if (r.status !== 200 || !Array.isArray(list)) break;
       var added = 0;
@@ -362,9 +478,9 @@
         var e = list[i] || {};
         var number = num(e.episode), sn = num(e.season) || season;
         if (!number || e.available === false) continue;
-        var key = sn + ':' + number;
-        if (seen[key]) continue;
-        seen[key] = true;
+        var dedupe = sn + ':' + number;
+        if (seen[dedupe]) continue;
+        seen[dedupe] = true;
         added++;
         var entry = {
           number: number,
@@ -378,20 +494,7 @@
       }
       if (list.length < 25 || added === 0) break;
     }
-    return out;
-  }
-
-  async function mapLimit(list, limit, fn) {
-    var out = new Array(list.length), next = 0;
-    async function worker() {
-      while (next < list.length) {
-        var i = next++;
-        out[i] = await fn(list[i], i).catch(function () { return []; });
-      }
-    }
-    var workers = [], n = Math.min(limit, list.length);
-    for (var i = 0; i < n; i++) workers.push(worker());
-    await Promise.all(workers);
+    if (out.length) cacheSet(key, out, 300000);
     return out;
   }
 
@@ -402,31 +505,44 @@
       return [{ number: 1, href: 'movie-' + ref.id, title: 'Film', season: null }];
     }
     if (!ref.slug) throw new Error('MIAW : identifiant de serie incomplet.');
+    var key = 'episodes:' + ref.id;
+    var cached = cacheGet(key);
+    if (cached) return cached;
+    if (isLimited()) throw limitedError();
 
-    var deadline = now() + 26000;
-    var page = await fetchText(SITE + '/series/' + encodeURIComponent(ref.slug), JSON_HEADERS, left(deadline, 9000));
+    var deadline = now() + 30000;
+    var page = await fichePage(ref, deadline);
     if (page.status !== 200 || !page.text) throw new Error('MIAW episodes failed (HTTP ' + page.status + ')');
 
     var seasons = seasonsOf(page.text);
     if (!seasons.length) seasons = seasonsFromLd(page.text, 'tv');
     if (!seasons.length) throw new Error('MIAW : aucune saison listee pour cette serie.');
 
-    var lists = await mapLimit(seasons, 3, function (s) {
-      return seasonEpisodes(ref.id, s.number, deadline);
-    });
-
-    var out = [], seen = {};
-    for (var i = 0; i < lists.length; i++) {
-      var list = lists[i] || [];
-      for (var j = 0; j < list.length; j++) {
-        var key = list[j].season + ':' + list[j].number;
-        if (seen[key]) continue;
-        seen[key] = true;
+    var out = [], seen = {}, failed = 0, i, j;
+    for (i = 0; i < seasons.length; i++) {
+      if (now() >= deadline - 1200) break;
+      var list;
+      try {
+        list = await seasonEpisodes(ref.id, seasons[i].number, deadline);
+      } catch (e) {
+        /* A rate limit stops the walk: a truncated list would hide episodes, so
+         * the caller is told to retry. Completed seasons stay cached, so the
+         * retry only reads the seasons that were still missing. */
+        if (e && e.limited) throw e;
+        failed++;
+        continue;
+      }
+      for (j = 0; j < (list || []).length; j++) {
+        var epKey = list[j].season + ':' + list[j].number;
+        if (seen[epKey]) continue;
+        seen[epKey] = true;
         out.push(list[j]);
       }
     }
+
     out.sort(function (a, b) { return (a.season - b.season) || (a.number - b.number); });
     if (!out.length) throw new Error('MIAW : aucun episode disponible.');
+    cacheSet(key, out, 300000);
     return out;
   }
 
@@ -540,10 +656,43 @@
     var url = ref.type === 'tv'
       ? SITE + '/api/watch/series/' + encodeURIComponent(ref.id) + '?season=' + (ref.season || 1) + '&episode=' + (ref.episode || 1)
       : SITE + '/api/watch/movie/' + encodeURIComponent(ref.id);
-    var r = await fetchJson(url, merge(JSON_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 10000));
+    var key = 'watch:' + url;
+    var cached = cacheGet(key);
+    if (cached) return cached;
+    if (isLimited()) return null;
+    var r = await fetchJson(url, merge(JSON_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 8000));
     var players = r.data && r.data.data && r.data.data.players;
     if (r.status !== 200 || !Array.isArray(players)) return null;
+    cacheSet(key, players, 90000);
     return players;
+  }
+
+  /* /api/uqload/hd/<id>.m3u8 answers a 302 to the signed strm*.uqload.vc master
+   * (valid ~4 h). It is the site's own second player, keeps French and English
+   * audio tracks and, unlike blink, exists in a VOSTFR variant. */
+  async function resolveUqload(src, deadline) {
+    var url = /^https?:\/\//i.test(src) ? src : SITE + src;
+    var hop = await fetchv2(url, merge(UQLOAD_HEADERS, { 'Referer': SITE + '/' }), 'GET', null,
+      { timeoutMs: left(deadline, 4000), followRedirects: false });
+    var status = num(hop && (hop.status || hop.statusCode));
+    var headers = (hop && hop.headers) || {};
+    var loc = headers.location || headers.Location || '';
+    var masterUrl = '';
+    if (status >= 300 && status < 400 && loc) masterUrl = resolveUrl(url, String(loc));
+    else if (status === 200) masterUrl = url;
+    if (!/^https:\/\//i.test(masterUrl) || !/\.m3u8(?:$|[?#])/i.test(masterUrl)) return null;
+
+    var master = await fetchText(masterUrl, UQLOAD_HEADERS, left(deadline, 3000));
+    if (master.status !== 200 || !master.text) return null;
+    var variants = parseMaster(master.text, masterUrl);
+    if (!variants.length) return null;
+    var isSub = /vostfr/i.test(String(src));
+    var packed = packHls(variants, masterUrl, { headers: UQLOAD_HEADERS, lang: isSub ? 'sub' : 'dub' });
+    if (!packed) return null;
+    return {
+      player: 'Miaw', type: 'hls', height: (variants[0] && variants[0].height) || 0,
+      primary: false, pref: 1, packed: packed
+    };
   }
 
   async function resolveBlink(src, deadline) {
@@ -555,7 +704,7 @@
     var cur = src, i;
     for (i = 0; i < 6 && now() < deadline; i++) {
       var res = await fetchv2(cur, merge(BLINK_HEADERS, { 'Range': 'bytes=0-1' }), 'GET', null,
-        { timeoutMs: left(deadline, 4000), followRedirects: false });
+        { timeoutMs: left(deadline, 2500), followRedirects: false });
       var status = num(res && (res.status || res.statusCode));
       var headers = (res && res.headers) || {};
       var loc = headers.location || headers.Location || '';
@@ -567,8 +716,8 @@
       var ct = String(headers['content-type'] || '');
       if (ct && !/video|octet-stream/i.test(ct)) return null;
       return {
-        player: 'Miaw', type: 'mp4', height: 0, primary: true,
-        packed: packMp4(cur, STREAM_HEADERS, 'HD', 'dub')
+        player: 'Miaw MP4', type: 'mp4', height: 0, primary: true, pref: 3,
+        packed: packMp4(cur, STREAM_HEADERS, 'MP4', 'dub')
       };
     }
     return null;
@@ -638,7 +787,7 @@
       : packMp4(srcUrl, headers, 'Auto', lang);
     if (!packed) return null;
     packed.streamType = 'hls';
-    return { player: 'Vidzy', type: 'hls', height: (variants[0] && variants[0].height) || 0, packed: packed };
+    return { player: 'Vidzy', type: 'hls', height: (variants[0] && variants[0].height) || 0, pref: 2, packed: packed };
   }
 
   function readerLabel(reader) {
@@ -671,31 +820,40 @@
           headers: q.headers || reader.packed.headers,
           height: q.height || 0,
           primary: reader.primary ? 1 : 0,
+          pref: reader.pref || 0,
           type: q.height ? (reader.packed.streamType || 'hls') : (reader.type || reader.packed.streamType),
           lang: q.lang || reader.packed.lang || 'dub',
           provider: reader.player,
+          reader: r,
           seq: candidates.length
         });
       }
     }
     if (!candidates.length) return null;
 
+    /* Preference breaks ties between readers: a rendition that plays under any
+     * client fingerprint beats one whose CDN swaps the file for a promo when a
+     * foreign Referer is attached. */
     candidates.sort(function (a, b) {
-      return (b.primary - a.primary) || (b.height - a.height) || (a.seq - b.seq);
+      return (b.primary - a.primary) || (b.pref - a.pref) || (b.height - a.height) || (a.seq - b.seq);
     });
 
+    /* `streams` is the flat label/URL list read by older clients, which apply
+     * the response-level headers to every pair. It therefore carries only the
+     * default reader's renditions: those are the ones whose headers it shares.
+     * Every checked rendition, with its own host headers, is in `qualities`
+     * and `servers`. */
+    var top = candidates[0];
     var entries = [], streams = [];
     for (i = 0; i < candidates.length; i++) {
       entries.push({ label: candidates[i].label, url: candidates[i].url, headers: candidates[i].headers });
-      streams.push(candidates[i].label, candidates[i].url);
+      if (candidates[i].reader === top.reader) streams.push(candidates[i].label, candidates[i].url);
     }
-
-    var top = candidates[0];
     return {
       url: top.url,
-      /* The default headers are the common set every listed rendition accepts;
-       * each quality still carries the exact headers its host expects. */
-      headers: STREAM_HEADERS,
+      /* The exact headers of the opened rendition, so a player that only reads
+       * the result-level set still gets the right fingerprint. */
+      headers: top.headers,
       streamType: top.type || 'hls',
       quality: top.label,
       defaultQuality: top.label,
@@ -725,46 +883,71 @@
       ref.season = ref.season || 1;
       ref.episode = ref.episode || 1;
     }
+    var wantSub = String(lang || '').toLowerCase() === 'sub';
+    var cacheKey = 'stream:' + (ref.type === 'tv'
+      ? 'tv-' + ref.id + '-s' + ref.season + 'e' + ref.episode
+      : 'movie-' + ref.id) + ':' + (wantSub ? 'sub' : 'dub');
+    var cached = cacheGet(cacheKey);
+    if (cached) return cached;
+    if (isLimited()) return streamFail(limitedError().message);
 
-    var deadline = now() + 22000;
+    var deadline = now() + 20000;
     var players = await watchPlayers(ref, deadline);
     if (!players || !players.length) {
       return streamFail('MIAW : aucun lecteur disponible pour ce titre. Reessayez plus tard ou choisissez un autre titre.');
     }
 
-    var wantSub = String(lang || '').toLowerCase() === 'sub';
-    var blinkSrc = '', moviezSrc = '', vidzySrc = '', vidzySubSrc = '';
+    var blinkSrc = '', uqSrc = '', uqSubSrc = '', vidzySrc = '', vidzySubSrc = '', moviezSrc = '';
     for (var i = 0; i < players.length; i++) {
       var p = players[i] || {};
       var src = String(p.src || '');
       if (!src) continue;
-      if (p.entryId === 'blink:vf' || /\/api\/blink\/v\//i.test(src)) blinkSrc = src;
-      else if (p.type === 'moviez' || /^https:\/\/api\.moviez\.ac\//i.test(src)) moviezSrc = src;
-      else if (p.type === 'vidzy' || /^https:\/\/vidzy\./i.test(src)) {
-        if (/\/vostfr(?:[?]|$)/i.test(src)) { if (!vidzySubSrc) vidzySubSrc = src; }
+      var isSub = /vostfr/i.test(String(p.entryId || '')) || String(p.language || '') === 'vostfr';
+      if (/\/api\/blink\/v\//i.test(src)) blinkSrc = src;
+      else if (/\/api\/uqload\/hd\/[^\/?#]+\.m3u8/i.test(src)) {
+        if (isSub) { if (!uqSubSrc) uqSubSrc = src; }
+        else if (!uqSrc) uqSrc = src;
+      } else if (p.type === 'vidzy' || /^https:\/\/vidzy\./i.test(src)) {
+        if (isSub) { if (!vidzySubSrc) vidzySubSrc = src; }
         else if (!vidzySrc) vidzySrc = src;
+      } else if (!moviezSrc && (p.type === 'moviez' || /^https:\/\/api\.moviez\.ac\//i.test(src))) {
+        moviezSrc = src;
       }
     }
-    if (wantSub && vidzySubSrc) vidzySrc = vidzySubSrc;
-    else if (!vidzySrc) vidzySrc = vidzySubSrc;
+    /* A subtitle request opens the VOSTFR rendition when the site publishes one. */
+    var uqPick = wantSub ? (uqSubSrc || uqSrc) : (uqSrc || uqSubSrc);
+    var vidzyPick = wantSub ? (vidzySubSrc || vidzySrc) : (vidzySrc || vidzySubSrc);
 
+    /* The three readers are bounded and started together: blink answers in
+     * ~300 ms, uqload's signed redirect takes 0.3-11 s depending on its token
+     * service, Vidzy ~0.3-1 s. A 2.8 s cap keeps the player from waiting on a
+     * slow backup while still listing every rendition that answered in time. */
     var settled = await Promise.all([
-      blinkSrc ? resolveBlink(blinkSrc, now() + 10000).catch(function () { return null; }) : null,
-      moviezSrc ? resolveMoviez(moviezSrc, now() + 12000).catch(function () { return null; }) : null,
-      vidzySrc ? resolveVidzy(vidzySrc, now() + 11000).catch(function () { return null; }) : null
+      blinkSrc ? resolveBlink(blinkSrc, now() + 2500).catch(function () { return null; }) : null,
+      uqPick ? resolveUqload(uqPick, now() + 2800).catch(function () { return null; }) : null,
+      vidzyPick ? resolveVidzy(vidzyPick, now() + 2600).catch(function () { return null; }) : null
     ]);
 
     var readers = [];
     for (var j = 0; j < settled.length; j++) if (settled[j]) readers.push(settled[j]);
-    /* Only Vidzy carries VOSTFR here, so a subtitle request promotes it above
-     * the VF MP4 that is otherwise opened by default. */
+    /* Only the VOSTFR renditions carry subtitled audio here, so a subtitle
+     * request promotes them above the VF players. */
     if (wantSub) {
       var hasSub = false, k;
       for (k = 0; k < readers.length; k++) if (readers[k].packed.lang === 'sub') hasSub = true;
       if (hasSub) for (k = 0; k < readers.length; k++) readers[k].primary = readers[k].packed.lang === 'sub';
     }
     var composed = composeReaders(readers);
-    if (composed) return composed;
+    if (!composed && moviezSrc) {
+      /* Moviez only runs when nothing else answered: its page/stream service
+       * regularly needs several seconds, so it never delays a working player. */
+      var mz = await resolveMoviez(moviezSrc, now() + 4000).catch(function () { return null; });
+      if (mz) composed = composeReaders([mz]);
+    }
+    if (composed) {
+      cacheSet(cacheKey, composed, 60000);
+      return composed;
+    }
     return streamFail('MIAW : les lecteurs du site n\'ont pas fourni de flux pour ce titre.');
   }
 
@@ -786,14 +969,24 @@
     return out;
   }
 
+  /* Catalogue pages are cached: the app re-opens home/tabs often and every
+   * saved request is one less chance of tripping the site's rate limit. */
   async function pageItems(path, deadline) {
+    var key = 'page:' + path;
+    var cached = cacheGet(key);
+    if (cached) return cached;
+    if (isLimited()) return [];
     var r = await fetchText(SITE + path, HTML_HEADERS, left(deadline, 7000));
     if (r.status !== 200 || !r.text) return [];
-    return itemsOf(r.text);
+    var items = itemsOf(r.text);
+    if (items.length) cacheSet(key, items, 180000);
+    return items;
   }
 
   async function discoveryHome() {
-    var deadline = now() + 7500;
+    var cachedHome = cacheGet('home');
+    if (cachedHome) return cachedHome;
+    var deadline = now() + 9000;
     var lists = await Promise.all([
       pageItems('/movies?sort=rating&page=1', deadline),
       pageItems('/series?sort=rating&page=1', deadline),
@@ -805,10 +998,13 @@
     /* The homepage rails are the fallback when a catalogue page is unavailable. */
     if (!movieTop.length && !seriesTop.length && !movieNew.length && !seriesNew.length) {
       var fallback = await pageItems('/', deadline);
-      for (var f = 0; f < fallback.length; f++) {
-        if (fallback[f].kind === 'movie') movieNew.push(fallback[f]);
-        else seriesNew.push(fallback[f]);
+      var movies = [], shows = [], f;
+      for (f = 0; f < fallback.length; f++) {
+        if (fallback[f].kind === 'movie') movies.push(fallback[f]);
+        else shows.push(fallback[f]);
       }
+      if (movies.length) movieNew = movieNew.concat(movies);
+      if (shows.length) seriesNew = seriesNew.concat(shows);
     }
 
     var sections = [], seen = {}, i, j;
@@ -844,6 +1040,9 @@
         viewAll: { mode: 'feed', feedId: defs[j].feedId }
       });
     }
+    /* An empty result means the site refused the requests, not that the
+     * catalogue is empty: caching it would freeze a failure in place. */
+    if (sections.length) cacheSet('home', { sections: sections }, 240000);
     return { sections: sections };
   }
 
