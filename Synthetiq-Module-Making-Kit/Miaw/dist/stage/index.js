@@ -3,14 +3,20 @@
  * ----------------------------------------------------------------------------
  * Catalogue: miaw.tv's public JSON API (/api/search, /api/series/<id>/seasons)
  * in fr-FR; posters and stills come from the same TMDB image host the site uses.
- * Playback: the watch API lists the site's own players. "blink" hands out a
- * signed MP4 on zen-cdn, reached through two redirects; moviez answers an HLS
- * master (1080p/720p/360p); the site's own miaw2 player and vidzy answer HLS
- * masters with French and English audio plus a VOSTFR variant. The readers run
- * in parallel and every checked rendition is offered with its player name and
- * quality, highest first. Each rendition carries the exact headers its host
- * expects; blink, which plays under any client fingerprint and is the player
- * the site opens by default, keeps the top slot.
+ * Playback: the watch API lists the site's own players. "lecteur miaw" (blink)
+ * hands out a signed MP4 HD on zen-cdn, reached through two redirects;
+ * "lecteur miaw 2" (miaw2) and "lecteur vidzy" answer HLS masters with French
+ * and English audio plus a VOSTFR variant; "lecteur moviez" answers an HLS
+ * master. The readers run in parallel and every checked rendition is offered
+ * with the site's player name and its quality. Each rendition carries the exact
+ * headers its host expects.
+ *
+ * Player order is a compatibility choice, not a speed one: blink's MP4 plays
+ * under any client fingerprint, miaw2's HLS is served to a plain request, and
+ * Vidzy's CDN hard-blocks player user agents (ExoPlayer, okhttp, VLC) unless the
+ * player applies the Firefox headers attached to it. So blink stays first, and
+ * miaw2 is the fallback default when blink is late; Vidzy is only ever a
+ * deliberate choice.
  * Metadata: the fiche's JSON-LD block carries title, overview, genres, year,
  * poster and season/episode counts.
  * Discovery: the catalogue pages (/movies, /series with sort=rating|recent)
@@ -667,10 +673,12 @@
     return players;
   }
 
-  /* /api/uqload/hd/<id>.m3u8 answers a 302 to the signed strm*.uqload.vc master
-   * (valid ~4 h). It is the site's own second player, keeps French and English
-   * audio tracks and, unlike blink, exists in a VOSTFR variant. */
-  async function resolveUqload(src, deadline) {
+  /*  /api/uqload/hd/<id>.m3u8 answers a 302 to the signed strm*.uqload.vc master
+   *  (valid ~4 h). It is the site's own second player ("lecteur miaw 2"), keeps
+   *  French and English audio tracks and, unlike blink, exists in a VOSTFR
+   *  variant. The master is served to a plain request and to any user agent;
+   *  only a foreign Referer makes it redirect to a promo. */
+  async function resolveUqload(src, deadline, siteName, isSubLang) {
     var url = /^https?:\/\//i.test(src) ? src : SITE + src;
     var hop = await fetchv2(url, merge(UQLOAD_HEADERS, { 'Referer': SITE + '/' }), 'GET', null,
       { timeoutMs: left(deadline, 4000), followRedirects: false });
@@ -686,25 +694,44 @@
     if (master.status !== 200 || !master.text) return null;
     var variants = parseMaster(master.text, masterUrl);
     if (!variants.length) return null;
-    var isSub = /vostfr/i.test(String(src));
+    var isSub = !!isSubLang || /vostfr/i.test(String(src));
     var packed = packHls(variants, masterUrl, { headers: UQLOAD_HEADERS, lang: isSub ? 'sub' : 'dub' });
     if (!packed) return null;
     return {
-      player: 'Miaw', type: 'hls', height: (variants[0] && variants[0].height) || 0,
-      primary: false, pref: 1, packed: packed
+      player: siteName || 'lecteur miaw 2', provider: 'miaw2', type: 'hls',
+      height: (variants[0] && variants[0].height) || 0,
+      primary: false, safe: true, pref: 3, packed: packed
     };
   }
 
-  async function resolveBlink(src, deadline) {
+  async function resolveBlink(src, deadline, siteName) {
     if (!/^https?:\/\//i.test(src)) src = SITE + src;
     /* The signed file is reached through the CDN and its proxy, and the link
      * handed to the player is the final `?ff=` URL. Every hop carries a
      * one-byte Range so the file itself is never downloaded here; the last hop
-     * answers 206 with 2 bytes. */
+     * answers 206 with 2 bytes. The proxy hop regularly takes 2-3 s on a cold
+     * title, so the caller gives this reader a wide budget. */
+    function readerAt(url) {
+      return {
+        player: siteName || 'lecteur miaw', provider: 'blink', type: 'mp4',
+        height: 0, primary: true, safe: true, pref: 4,
+        packed: packMp4(url, STREAM_HEADERS, 'HD', 'dub')
+      };
+    }
     var cur = src, i;
-    for (i = 0; i < 6 && now() < deadline; i++) {
-      var res = await fetchv2(cur, merge(BLINK_HEADERS, { 'Range': 'bytes=0-1' }), 'GET', null,
-        { timeoutMs: left(deadline, 2500), followRedirects: false });
+    for (i = 0; i < 8 && now() < deadline; i++) {
+      var res;
+      try {
+        res = await fetchv2(cur, merge(BLINK_HEADERS, { 'Range': 'bytes=0-1' }), 'GET', null,
+          { timeoutMs: left(deadline, 3500), followRedirects: false });
+      } catch (err) {
+        /* The signed URL usually honours the Range (206, 2 bytes), but the CDN
+         * sometimes answers the whole MP4: the sandbox then aborts at its 5 MiB
+         * response cap. A body that size is the file itself, so the signed URL
+         * is valid. Any other abort stays a failure. */
+        var msg = String((err && err.message) || '');
+        return /\.mp4\?ff=/i.test(cur) && /exceed|MiB/i.test(msg) ? readerAt(cur) : null;
+      }
       var status = num(res && (res.status || res.statusCode));
       var headers = (res && res.headers) || {};
       var loc = headers.location || headers.Location || '';
@@ -715,10 +742,7 @@
       if ((status !== 200 && status !== 206) || !/\.mp4(?:$|[?#])/i.test(cur)) return null;
       var ct = String(headers['content-type'] || '');
       if (ct && !/video|octet-stream/i.test(ct)) return null;
-      return {
-        player: 'Miaw MP4', type: 'mp4', height: 0, primary: true, pref: 3,
-        packed: packMp4(cur, STREAM_HEADERS, 'MP4', 'dub')
-      };
+      return readerAt(cur);
     }
     return null;
   }
@@ -729,7 +753,7 @@
     try { return JSON.parse(m[1]); } catch (_) { return null; }
   }
 
-  async function resolveMoviez(src, deadline) {
+  async function resolveMoviez(src, deadline, siteName) {
     var pageUrl = /^https?:\/\//i.test(src) ? src : MOVIEZ + src;
     var page = await fetchText(pageUrl, merge(HTML_HEADERS, { 'Referer': SITE + '/' }), left(deadline, 8000));
     if (page.status !== 200 || !page.text) return null;
@@ -751,7 +775,11 @@
       : packMp4(String(r.data.hls), MOVIEZ_STREAM_HEADERS, 'Auto', lang);
     if (!packed) return null;
     packed.streamType = 'hls';
-    return { player: 'Moviez', type: 'hls', height: (variants[0] && variants[0].height) || 0, packed: packed };
+    return {
+      player: siteName || 'lecteur moviez', provider: 'moviez', type: 'hls',
+      height: (variants[0] && variants[0].height) || 0,
+      safe: true, pref: 1, packed: packed
+    };
   }
 
   function vidzySourceOf(html) {
@@ -762,9 +790,9 @@
     return m[1];
   }
 
-  async function resolveVidzy(src, deadline) {
+  async function resolveVidzy(src, deadline, siteName, isSubLang) {
     var pageUrl = /^https?:\/\//i.test(src) ? src : VIDZY + src;
-    var isSub = /\/vostfr(?:[?#]|$)/i.test(pageUrl);
+    var isSub = !!isSubLang || /\/vostfr(?:[?#]|$)/i.test(pageUrl);
     var page = await fetchText(pageUrl, merge(HTML_HEADERS, {
       'User-Agent': VIDZY_UA, 'Referer': SITE + '/', 'Accept-Encoding': 'identity'
     }), left(deadline, 6000));
@@ -787,7 +815,11 @@
       : packMp4(srcUrl, headers, 'Auto', lang);
     if (!packed) return null;
     packed.streamType = 'hls';
-    return { player: 'Vidzy', type: 'hls', height: (variants[0] && variants[0].height) || 0, pref: 2, packed: packed };
+    return {
+      player: siteName || 'lecteur vidzy', provider: 'vidzy', type: 'hls',
+      height: (variants[0] && variants[0].height) || 0,
+      primary: false, safe: false, pref: 2, packed: packed
+    };
   }
 
   function readerLabel(reader) {
@@ -799,9 +831,9 @@
     if (!order.length) return null;
 
     /* Every checked rendition from every reader is offered. Measured heights
-     * rank highest first, but the site's own player (blink) is the one its page
-     * starts automatically and its MP4 declares no resolution, so it keeps the
-     * top slot instead of being sorted below an HLS rendition. */
+     * rank highest first, but preference breaks ties between readers in a
+     * deliberate order: blink's MP4 first, then miaw2, then Vidzy, then moviez.
+     * See the header note on why Vidzy never becomes the default. */
     var candidates = [], labels = {}, r, i;
     for (r = 0; r < order.length; r++) {
       var reader = order[r];
@@ -816,6 +848,7 @@
         labels[label] = true;
         candidates.push({
           label: label,
+          tier: q.label,
           url: q.url,
           headers: q.headers || reader.packed.headers,
           height: q.height || 0,
@@ -823,7 +856,7 @@
           pref: reader.pref || 0,
           type: q.height ? (reader.packed.streamType || 'hls') : (reader.type || reader.packed.streamType),
           lang: q.lang || reader.packed.lang || 'dub',
-          provider: reader.player,
+          provider: reader.provider || reader.player,
           reader: r,
           seq: candidates.length
         });
@@ -831,9 +864,6 @@
     }
     if (!candidates.length) return null;
 
-    /* Preference breaks ties between readers: a rendition that plays under any
-     * client fingerprint beats one whose CDN swaps the file for a promo when a
-     * foreign Referer is attached. */
     candidates.sort(function (a, b) {
       return (b.primary - a.primary) || (b.pref - a.pref) || (b.height - a.height) || (a.seq - b.seq);
     });
@@ -847,7 +877,9 @@
     var entries = [], streams = [];
     for (i = 0; i < candidates.length; i++) {
       entries.push({ label: candidates[i].label, url: candidates[i].url, headers: candidates[i].headers });
-      if (candidates[i].reader === top.reader) streams.push(candidates[i].label, candidates[i].url);
+      if (candidates[i].reader === top.reader) {
+        streams.push((candidates[i].lang === 'sub' ? 'sub ' : 'dub ') + candidates[i].label, candidates[i].url);
+      }
     }
     return {
       url: top.url,
@@ -855,17 +887,18 @@
        * the result-level set still gets the right fingerprint. */
       headers: top.headers,
       streamType: top.type || 'hls',
-      quality: top.label,
-      defaultQuality: top.label,
+      quality: top.tier,
+      defaultQuality: top.tier,
       streams: streams,
       qualities: entries,
       subtitles: [],
       lang: top.lang,
       provider: top.provider,
       servers: order.map(function (rd) {
+        var best = (rd.packed.qualities && rd.packed.qualities[0]) || {};
         return {
           name: rd.player,
-          label: readerLabel(rd),
+          label: best.label || 'Auto',
           url: rd.packed.url,
           headers: rd.packed.headers,
           streamType: rd.packed.streamType || 'hls',
@@ -897,51 +930,74 @@
       return streamFail('MIAW : aucun lecteur disponible pour ce titre. Reessayez plus tard ou choisissez un autre titre.');
     }
 
-    var blinkSrc = '', uqSrc = '', uqSubSrc = '', vidzySrc = '', vidzySubSrc = '', moviezSrc = '';
+    var blinkSrc = '', blinkName = '', uqSrc = '', uqName = '', uqSubSrc = '', uqSubName = '';
+    var vidzySrc = '', vidzyName = '', vidzySubSrc = '', vidzySubName = '', moviezSrc = '', moviezName = '';
     for (var i = 0; i < players.length; i++) {
       var p = players[i] || {};
       var src = String(p.src || '');
       if (!src) continue;
+      var siteName = String(p.name || '').replace(/\s*-\s*avec pub.*$/i, '').trim();
       var isSub = /vostfr/i.test(String(p.entryId || '')) || String(p.language || '') === 'vostfr';
-      if (/\/api\/blink\/v\//i.test(src)) blinkSrc = src;
+      if (/\/api\/blink\/v\//i.test(src)) { if (!blinkSrc) { blinkSrc = src; blinkName = siteName; } }
       else if (/\/api\/uqload\/hd\/[^\/?#]+\.m3u8/i.test(src)) {
-        if (isSub) { if (!uqSubSrc) uqSubSrc = src; }
-        else if (!uqSrc) uqSrc = src;
+        if (isSub) { if (!uqSubSrc) { uqSubSrc = src; uqSubName = siteName; } }
+        else if (!uqSrc) { uqSrc = src; uqName = siteName; }
       } else if (p.type === 'vidzy' || /^https:\/\/vidzy\./i.test(src)) {
-        if (isSub) { if (!vidzySubSrc) vidzySubSrc = src; }
-        else if (!vidzySrc) vidzySrc = src;
+        if (isSub) { if (!vidzySubSrc) { vidzySubSrc = src; vidzySubName = siteName; } }
+        else if (!vidzySrc) { vidzySrc = src; vidzyName = siteName; }
       } else if (!moviezSrc && (p.type === 'moviez' || /^https:\/\/api\.moviez\.ac\//i.test(src))) {
-        moviezSrc = src;
+        moviezSrc = src; moviezName = siteName;
       }
     }
     /* A subtitle request opens the VOSTFR rendition when the site publishes one. */
-    var uqPick = wantSub ? (uqSubSrc || uqSrc) : (uqSrc || uqSubSrc);
-    var vidzyPick = wantSub ? (vidzySubSrc || vidzySrc) : (vidzySrc || vidzySubSrc);
+    var uqPick, uqPickName, uqPickSub, vidzyPick, vidzyPickName, vidzyPickSub;
+    if (wantSub) {
+      uqPick = uqSubSrc || uqSrc;
+      uqPickName = uqSubSrc ? uqSubName : uqName;
+      uqPickSub = !!uqSubSrc;
+      vidzyPick = vidzySubSrc || vidzySrc;
+      vidzyPickName = vidzySubSrc ? vidzySubName : vidzyName;
+      vidzyPickSub = !!vidzySubSrc;
+    } else {
+      uqPick = uqSrc || uqSubSrc;
+      uqPickName = uqSrc ? uqName : uqSubName;
+      uqPickSub = !uqSrc && !!uqSubSrc;
+      vidzyPick = vidzySrc || vidzySubSrc;
+      vidzyPickName = vidzySrc ? vidzyName : vidzySubName;
+      vidzyPickSub = !vidzySrc && !!vidzySubSrc;
+    }
 
-    /* The three readers are bounded and started together: blink answers in
-     * ~300 ms, uqload's signed redirect takes 0.3-11 s depending on its token
-     * service, Vidzy ~0.3-1 s. A 2.8 s cap keeps the player from waiting on a
-     * slow backup while still listing every rendition that answered in time. */
+    /* The three readers are bounded and started together. blink's chain has a
+     * proxy hop that regularly needs 2-3 s on a cold title (a 2.5 s cap dropped
+     * the site's own HD player), so it gets the widest budget; the two HLS
+     * backups answer in under a second when their token service is warm. */
     var settled = await Promise.all([
-      blinkSrc ? resolveBlink(blinkSrc, now() + 2500).catch(function () { return null; }) : null,
-      uqPick ? resolveUqload(uqPick, now() + 2800).catch(function () { return null; }) : null,
-      vidzyPick ? resolveVidzy(vidzyPick, now() + 2600).catch(function () { return null; }) : null
+      blinkSrc ? resolveBlink(blinkSrc, now() + 6000, blinkName).catch(function () { return null; }) : null,
+      uqPick ? resolveUqload(uqPick, now() + 3200, uqPickName, uqPickSub).catch(function () { return null; }) : null,
+      vidzyPick ? resolveVidzy(vidzyPick, now() + 2800, vidzyPickName, vidzyPickSub).catch(function () { return null; }) : null
     ]);
 
     var readers = [];
     for (var j = 0; j < settled.length; j++) if (settled[j]) readers.push(settled[j]);
-    /* Only the VOSTFR renditions carry subtitled audio here, so a subtitle
-     * request promotes them above the VF players. */
+    /* Only the VOSTFR renditions carry subtitled audio here. A subtitle request
+     * promotes one only when its host tolerates the player's own user agent
+     * (miaw2); Vidzy blocks player fingerprints, so promoting it would swap a
+     * working VF stream for one that answers 403 on the device. */
     if (wantSub) {
-      var hasSub = false, k;
-      for (k = 0; k < readers.length; k++) if (readers[k].packed.lang === 'sub') hasSub = true;
-      if (hasSub) for (k = 0; k < readers.length; k++) readers[k].primary = readers[k].packed.lang === 'sub';
+      var subReader = null, k;
+      for (k = 0; k < readers.length; k++) {
+        if (readers[k].packed.lang !== 'sub') continue;
+        if (!subReader || (readers[k].safe && !subReader.safe)) subReader = readers[k];
+      }
+      if (subReader && subReader.safe) {
+        for (k = 0; k < readers.length; k++) readers[k].primary = readers[k] === subReader;
+      }
     }
     var composed = composeReaders(readers);
     if (!composed && moviezSrc) {
       /* Moviez only runs when nothing else answered: its page/stream service
        * regularly needs several seconds, so it never delays a working player. */
-      var mz = await resolveMoviez(moviezSrc, now() + 4000).catch(function () { return null; });
+      var mz = await resolveMoviez(moviezSrc, now() + 4000, moviezName).catch(function () { return null; });
       if (mz) composed = composeReaders([mz]);
     }
     if (composed) {
