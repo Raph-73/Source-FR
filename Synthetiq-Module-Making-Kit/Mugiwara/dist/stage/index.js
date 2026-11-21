@@ -377,7 +377,12 @@
      * variant falls back to the newest one that clears the size threshold. */
     var artPath = await bestArtPath(ref.slug, options, deadline) || paths[0] || '';
 
-    var poster = assetUrl(ref.slug, artPath, 1920) || assetUrl(ref.slug, options.affiche, 1920);
+    /* The fiche only needs a portrait thumbnail: the 1920 variant is a
+     * 1920x2880 bitmap (169-529 KB of webp, ~25 MB decoded) that the app
+     * decodes while opening the page, which made the transition stutter.
+     * The 600 variant keeps the same artwork at 71-119 KB; home hero cards
+     * still use 1920 because they are painted full-screen. */
+    var poster = artPath ? assetUrl(ref.slug, artPath, 600) : '';
     var banner = assetUrl(ref.slug, options.affiche, 1280);
     var genres = [], themes = [];
     var cats = Array.isArray(anime.category) ? anime.category : [];

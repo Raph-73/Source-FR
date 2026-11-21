@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 28,
-  "bundleFile": "bundles/Ney-Source-Bundle-28.zip",
+  "bundleVersion": 29,
+  "bundleFile": "bundles/Ney-Source-Bundle-29.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -72,7 +72,7 @@
       ]
     },
     {
-      "file": "Synthetiq-Module-Making-Kit/Mugiwara/dist/Mugiwara-1.0.0-beta.8.zip",
+      "file": "Synthetiq-Module-Making-Kit/Mugiwara/dist/Mugiwara-1.0.0-beta.9.zip",
       "presentation": {
         "category": "Anime",
         "purpose": "French anime catalogue (VOSTFR / VF)",
@@ -85,6 +85,7 @@
         "iconUrl": "https://www.mugiwara-no-streaming.com/icone-512.png"
       },
       "changelog": [
+        "1.0.0-beta.9: Opening an anime fiche no longer hands the app a 1920x2880 poster. The details image/poster now uses the 600-wide season poster (71-119 KB, 0.54 Mpx) instead of the 1920 one (169-529 KB, 5.5 Mpx, about 25 MB decoded), which the app decoded during the page-opening animation and which showed up as stutter; the home hero still uses the 1920 artwork because it is painted full-screen. The module own work was measured clean on the same fiches (250-532 ms, 1 KB payload, event-loop gaps at most 21 ms), so the artwork was the only heavy item it handed over. Descriptions, episode counts, markers and playback are unchanged.",
         "1.0.0-beta.8: Playback no longer stalls on the skip-marker lookups. The MAL id is reused from the title page the fiche and the episode list already read, season 1 asks AniSkip directly instead of going through AniList first, and the whole lookup now runs on a 2.2 s budget (1 s title page, 0.7 s per AniList and AniSkip call) started after the season page, instead of a 9 s budget started before it. Measured on One Piece: the fiche-then-play flow drops from 7 requests to 5 and playback returns in 259-374 ms with intro/outro intact; seasons past the first still validate the boundary through AniList. Markers, VF support and the caches are unchanged.",
         "1.0.0-beta.7: VF playback now receives the same intro/outro markers as VOSTFR. AniSkip times the original TV cut, so a French dub that was re-cut can sit a few seconds off, but the ranges are forwarded as-is on both languages: measured on One Piece S1E1 the VF lane (1080p) returns op 28.783-118.783 / ed 1387.996-1500 and Bleach S1E1 op 0.557-90.557, with playback resolved in 261-304 ms, no slower than before. The beta.6 mapping is unchanged: MAL id from the title page, AniList released totals, exact season-boundary check, markers fetched in parallel and silent on any failure.",
         "1.0.0-beta.6: VOSTFR episodes now carry intro/outro skip timings from AniSkip. The MyAnimeList id comes from the title page and AniList's released episode counts place each site season on the MAL numbering: arc-split long-runners by offset (One Piece S2E1 is MAL episode 62) and franchises that publish one MAL entry per TV season through the sequel chain (Apothecary S2, Bleach TYBW parts), and a mapping is used only when a season boundary matches exactly. Measured: One Piece S1E1 op 28.783-118.783 / ed 1387.996-1500, Bleach S2-3E1 ed 1160-1240, Apothecary S3E1 op 69.13-154.13; episodes where AniSkip has no data keep no markers, and the VF receives none because a French dub can be re-cut while the app auto-seeks on these ranges. Markers are requested in parallel with the player probes and cached (ids 7 days, chain and markers 6 hours), so the player is not delayed and any failure is silent. Also fixes hyphenated season references: /episodes/saison2-2 was parsed as season 2 and played part 1 (Bleach TYBW), and mugiwara:<slug>:s2:e1 was rejected; both now resolve the requested season.",
@@ -110,6 +111,19 @@
       "changelog": [
         "1.0.0-beta.2: Fixed the interface lag felt while browsing the module. The request pacing used a microtask wait loop, which starved the app event loop for up to ~650 ms during title, episode and playback loads (measured). Pacing is removed and bursts are bounded by the request graph instead (season pages two at a time, playback at most four requests); a measured burst of nine parallel calls answered without HTTP 429. Cold handler times dropped from 1.2 s to 0.3 s for playback and from 1.3 s to under 0.1 s for a six-season list. Playback, sources and captions are unchanged.",
         "1.0.0-beta.1: New MetaFlix module (metaflix.fr): French catalogue with search, details, seasons/episodes and discovery (a la une, top 10, tendances, nouveautes, mieux notes, populaires, genres). Playback mirrors the site's own choice between its signed zen-cdn MP4 (verified with a one-byte Range, site Referer) and its segmented HLS (/api/v/, French and English audio, source VTT subtitles); the MP4 stays the default unless the title is flagged heavy, mixed-audio or low quality for the season. Intro markers from the site are forwarded, lists are cached and HTTP 429 is reported with a retry message. Local checks passed on Better Call Saul, The Mentalist, Spider-Man: Brand New Day; One Piece resolves its fMP4 HLS but the kit probe cannot sample init maps, and device playback, language and downloads remain unverified."
+      ]
+    },
+    {
+      "file": "Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/SportingStream/dist/SportingStream-1.0.0-beta.1.zip",
+      "presentation": {
+        "category": "Live sport",
+        "purpose": "Live French sport channels",
+        "recommended": false,
+        "language": "French",
+        "iconUrl": "https://sportingstream.site/logo.png"
+      },
+      "changelog": [
+        "1.0.0-beta.1: New SportingStream module (sportingstream.site), a live sport source. Search by channel, competition or match; channel and programme fiches; the site seven-day EPG with a day guide per channel; and discovery rows (live now, next 24 hours, one row per channel category, all channels). Playback asks the site for its short-lived token, then reads the one to three proxied HLS playlists it publishes and answers isLive=true, so the app keeps live-safe playback (no resume, no download, no seek, no markers). No stats provider is involved, so no liveEvent is exposed. Local checks: search, details, episodes, stream and discovery passed on CANAL FOOT and CANAL + SPORT, and one sampled segment of each of the three routes answered as mpeg-ts. Channels with a single source and channels with three both resolve; nothing is cached, so an expired token is refreshed by the next call. Device playback, the app Live tab routing and the source lifetime over a full day remain unverified."
       ]
     }
   ],
@@ -337,6 +351,13 @@
       "version": "1.0.0-beta.7",
       "sha256": "3e26879a8988fcc8ef8a75b0676617504833b5dab95eb8548e121b8177c44a5b",
       "retiredAtMs": 1795205989741
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/Mugiwara/dist/Mugiwara-1.0.0-beta.8.zip",
+      "moduleId": "mugiwara-v1",
+      "version": "1.0.0-beta.8",
+      "sha256": "7a44cb09980f486b19c0ea929a4465a14792f5f4e66df22c574c61286367c0ea",
+      "retiredAtMs": 1795254639513
     }
   ]
 }

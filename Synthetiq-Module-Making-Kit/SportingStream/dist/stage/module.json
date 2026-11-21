@@ -1,0 +1,42 @@
+{
+  "id": "sportingstream-v1",
+  "name": "SportingStream",
+  "contentType": "video",
+  "contractVersion": 4,
+  "moduleVersion": "1.0.0-beta.1",
+  "version": "1.0.0-beta.1",
+  "moduleFamilyId": "sportingstream_v1",
+  "moduleIdentity": "SP-VID-9008-SPORTINGSTREAM",
+  "moduleIdentityNumber": 9008,
+  "releaseTrack": "beta",
+  "moduleStatus": "trial",
+  "description": "Sport en direct sur sportingstream.site : 31 chaines sportives francaises (Canal+, beIN Sports, RMC Sport, Eurosport, L'Equipe, TF1, France 2...) et le guide des programmes publies par le site. Recherche par chaine, competition ou match, fiches par chaine et par programme, et lecture en direct uniquement : le module demande un jeton au site puis lit les playlists HLS live qu'il publie, en repondant isLive pour garder une lecture sans reprise, sans telechargement, sans avance rapide et sans marqueurs. Aucune donnee de statistiques de match n'est exposee : le module ne dispose pas de fournisseur licencie. Aucun contournement de compte, de paywall, de restriction ou de DRM ; seuls les endpoints publics appeles par le site sont utilises. La categorie Live de l'app peut afficher ce module comme une source video a lecture live selon la version de l'app.",
+  "presentation": {
+    "category": "Live sport",
+    "purpose": "Live French sport channels",
+    "recommended": false,
+    "language": "French",
+    "iconUrl": "https://sportingstream.site/logo.png"
+  },
+  "config": {
+    "capabilities": {
+      "discovery_v1": true,
+      "live_discovery_v1": true,
+      "live_sports_v1": true
+    },
+    "runtime": {
+      "entry": "index.js",
+      "mode": "local"
+    },
+    "caps": {
+      "homeMaxResults": 40,
+      "maxResponseBytes": 5242880,
+      "timeoutMs": 30000,
+      "maxConcurrentRequests": 6
+    },
+    "baseUrl": "https://sportingstream.site",
+    "streamHeaders": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
+  }
+}
