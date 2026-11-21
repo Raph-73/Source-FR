@@ -3,8 +3,8 @@
   "repositoryId": "ney-source",
   "name": "Ney Source",
   "enabled": true,
-  "bundleVersion": 29,
-  "bundleFile": "bundles/Ney-Source-Bundle-29.zip",
+  "bundleVersion": 30,
+  "bundleFile": "bundles/Ney-Source-Bundle-30.zip",
   "minAppVersion": "8.0.0",
   "modules": [
     {
@@ -114,15 +114,16 @@
       ]
     },
     {
-      "file": "Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/SportingStream/dist/SportingStream-1.0.0-beta.1.zip",
+      "file": "Raph-73/Source-FR/main/Synthetiq-Module-Making-Kit/SportingStream/dist/SportingStream-1.0.0-beta.2.zip",
       "presentation": {
-        "category": "Live sport",
-        "purpose": "Live French sport channels",
+        "category": "Live TV",
+        "purpose": "Sport",
         "recommended": false,
         "language": "French",
         "iconUrl": "https://sportingstream.site/logo.png"
       },
       "changelog": [
+        "1.0.0-beta.2: The app Live tab can now load the module. The Live tab asks modules with config.capabilities.live_discovery_v1 for liveHome(); the module now exports it and returns one entry per channel (id sportingstream:<id>, title, category, kind=channel, logo imageUrl, language, status) for all 31 channels, using the same ids extractDetails/extractEpisodes/extractStreamUrl already accept. The manifest category is now Live TV (purpose Sport), the way the app groups live sources, and the stream response now also carries url and type next to streams/streamType so the live player can take the default route directly. Measured locally: liveHome 369 ms for 31 channels, search 17 ms, details 1 ms, channel stream 119 ms returning url + isLive=true. The token flow, EPG and playback logic are unchanged; device confirmation of the Live tab still has to be done.",
         "1.0.0-beta.1: New SportingStream module (sportingstream.site), a live sport source. Search by channel, competition or match; channel and programme fiches; the site seven-day EPG with a day guide per channel; and discovery rows (live now, next 24 hours, one row per channel category, all channels). Playback asks the site for its short-lived token, then reads the one to three proxied HLS playlists it publishes and answers isLive=true, so the app keeps live-safe playback (no resume, no download, no seek, no markers). No stats provider is involved, so no liveEvent is exposed. Local checks: search, details, episodes, stream and discovery passed on CANAL FOOT and CANAL + SPORT, and one sampled segment of each of the three routes answered as mpeg-ts. Channels with a single source and channels with three both resolve; nothing is cached, so an expired token is refreshed by the next call. Device playback, the app Live tab routing and the source lifetime over a full day remain unverified."
       ]
     }
@@ -358,6 +359,13 @@
       "version": "1.0.0-beta.8",
       "sha256": "7a44cb09980f486b19c0ea929a4465a14792f5f4e66df22c574c61286367c0ea",
       "retiredAtMs": 1795254639513
+    },
+    {
+      "file": "Synthetiq-Module-Making-Kit/SportingStream/dist/SportingStream-1.0.0-beta.1.zip",
+      "moduleId": "sportingstream-v1",
+      "version": "1.0.0-beta.1",
+      "sha256": "955000d605ec01645c1a98a1b9cc6c4551e55b341f35a96d12a119d59883f06c",
+      "retiredAtMs": 1795255856811
     }
   ]
 }

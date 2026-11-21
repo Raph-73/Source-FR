@@ -261,6 +261,33 @@
     });
   }
 
+  /* ---------------------------------------------------------------- live tab */
+  /* The app's Live tab loads modules that declare
+   * config.capabilities.live_discovery_v1 by calling liveHome(). One item is
+   * one channel; the app opens it through extractDetails/extractEpisodes with
+   * the same id, and playback stays on extractStreamUrl. */
+  async function liveHome() {
+    var deadline = now() + 7000;
+    var data = await publicData(deadline);
+    var channels = channelsSorted(data);
+    var items = [], i, ch, logo;
+    for (i = 0; i < channels.length; i++) {
+      ch = channels[i];
+      logo = httpsUrl(ch.logo);
+      var item = {
+        id: channelHref(ch),
+        title: clean(ch.name),
+        category: clean(ch.category) || 'Direct',
+        kind: 'channel',
+        language: 'Français',
+        status: 'unknown'
+      };
+      if (logo) item.imageUrl = logo;
+      items.push(item);
+    }
+    return { items: items };
+  }
+
   function withChannels(data) {
     var out = [], i, p, ch;
     for (i = 0; i < data.streams.length; i++) {
@@ -464,6 +491,8 @@
       streams.push(urls[i]);
     }
     return {
+      url: urls[0],
+      type: 'hls',
       streams: streams,
       streamType: 'hls',
       isLive: true,
@@ -610,6 +639,7 @@
   /* No licensed statistics provider is involved, so no liveEvent is exposed and
    * extractLiveEvent is deliberately absent. */
 
+  globalThis.liveHome = liveHome;
   globalThis.searchResults = searchResults;
   globalThis.extractDetails = extractDetails;
   globalThis.extractEpisodes = extractEpisodes;
